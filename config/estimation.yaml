@@ -1,0 +1,29 @@
+# State Estimation & Sensor Fusion (EKF + Optical Flow)
+ekf:
+  state_dim: 15
+  initial_covariance:
+    pos: 0.05                  # m
+    vel: 0.1                   # m/s
+    att: 0.02                  # rad (yaw/pitch/roll)
+    accel_bias: 0.1            # m/s^2
+    gyro_bias: 0.02            # rad/s
+  process_noise:
+    accel: 0.15
+    gyro: 0.02
+    accel_bias_walk: 0.001
+    gyro_bias_walk: 0.0002
+  measurement_noise:
+    visual_odom_vel: 0.08      # m/s
+    altitude: 0.03             # m
+    sonar_map_match: 0.15      # m
+  pose_quality:
+    cov_threshold_hold: 0.8    # when pos covariance trace > 0.8m^2, enter cautious hold
+    cov_threshold_failsafe: 2.0# when pos covariance trace > 2.0m^2, trigger failsafe RTH
+
+optical_flow:
+  max_features: 60
+  min_distance: 7
+  feature_quality: 0.02
+  ransac_thresh: 1.5
+  min_inliers: 8
+

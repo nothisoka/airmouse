@@ -1,0 +1,25 @@
+# Occupancy Grid Mapping & Log-Odds Parameters
+occupancy_grid:
+  resolution_m: 0.25           # metres per cell (4 cells per 1.0m world grid)
+  default_size_cells: [160, 120]
+  origin_m: [0.0, 0.0]
+  
+  log_odds:
+    p_prior: 0.5               # l_0 = 0.0
+    p_occ: 0.85                # hit detection: log(0.85 / 0.15) = +1.734
+    p_free: 0.35               # free ray: log(0.35 / 0.65) = -0.619
+    l_min: -4.0                # clamp lower bound (prob ~ 0.018)
+    l_max: 4.0                 # clamp upper bound (prob ~ 0.982)
+    occ_threshold: 0.65        # probability > 0.65 -> occupied
+    free_threshold: 0.35       # probability < 0.35 -> free
+
+  cone_raycasting:
+    step_m: 0.10               # ray step along beam
+    hit_thickness_m: 0.20      # depth of occupied wall marking at beam end
+    beam_samples_across_cone: 5
+
+  inflation:
+    robot_radius_m: 0.25
+    safety_margin_m: 0.15
+    inflation_radius_m: 0.40   # combined safety buffer around obstacles
+

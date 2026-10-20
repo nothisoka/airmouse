@@ -1,0 +1,48 @@
+# Sensor Simulation & Configuration
+mpu6050:
+  rate_hz: 100
+  gyro:
+    noise_density: 0.005       # rad/s / sqrt(Hz)
+    random_walk: 0.0001        # rad/s^2 / sqrt(Hz)
+    initial_bias_max: 0.02     # rad/s
+  accel:
+    noise_density: 0.015       # m/s^2 / sqrt(Hz)
+    random_walk: 0.0005        # m/s^3 / sqrt(Hz)
+    initial_bias_max: 0.05     # m/s^2
+  gravity: 9.80665
+
+ultrasonic:
+  rate_hz: 20
+  min_range_m: 0.02
+  max_range_m: 4.0
+  cone_half_angle_deg: 7.5     # 15 deg full cone
+  num_cone_rays: 7             # rays cast across the cone to simulate ultrasonic beam
+  noise_std: 0.02              # 2cm Gaussian noise
+  dropout_prob: 0.03           # 3% chance of no-return (returns max_range)
+  # Orientations relative to drone forward (yaw offset in radians)
+  sensors:
+    front:
+      yaw_offset_rad: 0.0
+      pitch_offset_rad: 0.0
+    left:
+      yaw_offset_rad: 1.5707963
+      pitch_offset_rad: 0.0
+    right:
+      yaw_offset_rad: -1.5707963
+      pitch_offset_rad: 0.0
+    rear:
+      yaw_offset_rad: 3.14159265
+      pitch_offset_rad: 0.0
+    down:
+      yaw_offset_rad: 0.0
+      pitch_offset_rad: -1.5707963  # pointing straight down for altitude
+
+camera:
+  rate_hz: 20
+  width: 320
+  height: 240
+  fov_horizontal_deg: 70.0
+  fov_vertical_deg: 55.0
+  pitch_down_deg: 15.0         # slightly pitched down for ground / survivor viewing
+  focal_length_px: 228.5       # fx = (width/2) / tan(fov_h / 2)
+

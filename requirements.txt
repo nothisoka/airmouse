@@ -1,0 +1,4 @@
+numpy>=1.26
+pygame>=2.5
+opencv-python>=4.9
+ultralytics>=8.3

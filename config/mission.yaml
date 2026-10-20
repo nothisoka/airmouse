@@ -1,0 +1,29 @@
+# Mission Limits, Failsafes and Survivor Target
+mission:
+  max_survivors: 6
+  max_flight_time_s: 360.0      # 6 minute flight budget
+  battery_capacity_mah: 2200
+  nominal_current_draw_a: 12.0
+  low_battery_threshold_pct: 25.0
+  critical_battery_threshold_pct: 15.0 # immediate RTH
+
+  takeoff_altitude_m: 1.2
+  landing_altitude_m: 0.1
+  nominal_cruise_speed_mps: 0.6
+  max_cruise_speed_mps: 1.0
+  max_yaw_rate_rads: 1.2
+
+  rth_criterion:
+    all_survivors_found: true
+    no_frontiers_left: true
+    time_limit_reached: true
+    low_battery: true
+    pose_quality_loss: true
+
+perception:
+  model_path: "yolo11n.pt"
+  target_class: "person"
+  confidence_threshold: 0.25
+  confirmation_frames: 3       # must be seen in 3 distinct frames
+  dedupe_distance_gate_m: 1.2  # detections within 1.2m merged to same survivor
+

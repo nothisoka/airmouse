@@ -1,0 +1,21 @@
+# Path Planning & Exploration Parameters
+astar:
+  allow_diagonal: true
+  diagonal_cost: 1.41421356
+  max_iterations: 15000
+  replan_dist_threshold_m: 0.3 # replan when drone moves away from plan or map changes
+
+exploration:
+  frontier_min_cluster_size: 2 # minimum connected frontier cells to consider a target
+  info_gain_weight: 1.0        # alpha in utility = alpha * info_gain - beta * travel_cost
+  travel_cost_weight: 0.8      # beta
+  blacklist_max_attempts: 3    # mark frontier as blacklisted if path fails 3 times
+  blacklist_timeout_s: 30.0    # re-enable blacklisted frontiers after 30s
+  target_tolerance_m: 0.5      # considered reached if within 0.5m
+
+reactive_avoidance:
+  enabled: true
+  danger_distance_m: 0.35      # emergency halt and back-off if any sensor < 0.35m
+  slowdown_distance_m: 0.70    # modulate speed down when approaching obstacles
+  repulsion_gain: 0.5
+
