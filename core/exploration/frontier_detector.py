@@ -37,6 +37,11 @@ class FrontierDetector:
 
         # Failure count per grid cell target: (gx, gy) -> fail_count
         self.blacklist_counts: Dict[Tuple[int, int], int] = {}
+        self.seen_frontiers_set: Set[Tuple[int, int]] = set()
+
+    @property
+    def total_frontiers_seen(self) -> int:
+        return len(self.seen_frontiers_set)
 
     def report_failure(self, target_world: Tuple[float, float], grid_map: OccupancyGrid):
         gx, gy = grid_map.world_to_grid(target_world[0], target_world[1])
@@ -52,6 +57,7 @@ class FrontierDetector:
         frontier_cells = self._extract_frontier_cells(grid_map)
         if not frontier_cells:
             return []
+        self.seen_frontiers_set.update(frontier_cells)
 
         clusters = self._cluster_frontiers(frontier_cells, grid_map)
         if not clusters:

@@ -18,8 +18,21 @@ dependencies = [
 
 [tool.setuptools]
 package-dir = {"airmouse" = "."}
-
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["core*", "backends*", "tools*", "config*"]
+packages = [
+    "airmouse",
+    "airmouse.core",
+    "airmouse.core.estimation",
+    "airmouse.core.mapping",
+    "airmouse.core.exploration",
+    "airmouse.core.planning",
+    "airmouse.core.control",
+    "airmouse.core.perception",
+    "airmouse.core.mission",
+    "airmouse.backends",
+    "airmouse.backends.pygame_sim",
+    "airmouse.backends.gazebo_ros2",
+    "airmouse.backends.hardware",
+    "airmouse.tools",
+]
+py-modules = ["run", "generate_maps"]
 

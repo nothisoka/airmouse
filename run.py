@@ -12,11 +12,18 @@ from __future__ import annotations
 
 import argparse
 import math
+import random
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 import numpy as np
+import yaml
 
+try:
+    from airmouse.tools import generate_maps
+except ImportError:
+    import generate_maps
 from airmouse.core.mapping.map_io import load_map_file, cell_to_world
 from airmouse.core.mapping.occupancy_grid import OccupancyGrid
 from airmouse.core.estimation.ekf import SensorFusionEKF
@@ -24,6 +31,7 @@ from airmouse.core.perception.yolo_detector import YoloDetector
 from airmouse.core.perception.ray_projector import GroundRayProjector
 from airmouse.core.mission.state_machine import MissionCoordinator, MissionState
 from airmouse.core.mission.mission_logger import MissionLogger
+from airmouse.core.hal import PoseQuality
 
 from airmouse.backends.pygame_sim.drone_dynamics import DroneDynamics
 from airmouse.backends.pygame_sim.world_renderer import WorldRenderer
@@ -32,22 +40,73 @@ from airmouse.backends.pygame_sim.flight_sim import SimulatedFlightInterface
 from airmouse.backends.pygame_sim.pygame_viewer import PygameViewer
 
 
+def load_mission_config() -> dict:
+    cfg_path = Path(__file__).resolve().parent / "config" / "mission.yaml"
+    if cfg_path.exists():
+        with open(cfg_path, "r") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+def resolve_or_generate_map(map_path: str, seed: int = 42, mode: Optional[str] = None) -> Path:
+    """Return map file Path, generating it at runtime if missing or requested."""
+    p = Path(map_path)
+    if p.exists():
+        return p
+
+    name = p.stem
+    layout_mode = mode or ("house" if "house" in name else "maze")
+    out_dir = p.parent if str(p.parent) not in (".", "") else Path("generated_maps")
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    rng = random.Random(seed)
+    if layout_mode == "house":
+        grid = generate_maps.gen_house(28, 20, rng)
+        start = generate_maps.pick_start(grid, (2, 2))
+        generate_maps.add_obstacles(grid, rng, 5, avoid=start)
+    else:
+        grid = generate_maps.gen_maze(28, 20, rng)
+        start = generate_maps.pick_start(grid, (1, 1))
+        generate_maps.add_obstacles(grid, rng, 3, avoid=start)
+
+    people = generate_maps.place_people(grid, start, min(6, 1 + (seed % 6)), rng)
+    generate_maps.export_map(grid, start, people, seed, layout_mode, 1.0, out_dir, name)
+    print(f"Generated layout at runtime: {out_dir / f'{name}.json'}")
+    return out_dir / f"{name}.json"
+
+
 def run_pygame_sim(
     map_path: str,
     headless: bool = False,
-    max_flight_time_s: float = 300.0,
+    max_flight_time_s: Optional[float] = None,
+    hard_time_limit_s: Optional[float] = None,
+    max_sim_steps: Optional[int] = None,
     enable_yolo: bool = True,
     seed: int = 42,
+    mode: Optional[str] = None,
+    output_json: Optional[str] = None,
 ):
+    resolved_map = resolve_or_generate_map(map_path, seed=seed, mode=mode)
+
+    cfg = load_mission_config()
+    mission_cfg = cfg.get("mission", {})
+    if max_flight_time_s is None:
+        max_flight_time_s = float(mission_cfg.get("max_flight_time_s", 240.0))
+    if hard_time_limit_s is None:
+        hard_time_limit_s = float(mission_cfg.get("hard_time_limit_s", max_flight_time_s + 40.0))
+    if max_sim_steps is None:
+        max_sim_steps = int(mission_cfg.get("max_sim_steps", int(hard_time_limit_s * 100)))
+
     print(f"\n========================================================")
     print(f"  NIDAR AIRMOUSE: Autonomous Search & Sensor Fusion")
-    print(f"  Map: {map_path} | Headless: {headless} | Seed: {seed}")
+    print(f"  Map: {resolved_map} | Headless: {headless} | Seed: {seed}")
+    print(f"  Planned Budget: {max_flight_time_s:.1f}s | Hard Limit: {hard_time_limit_s:.1f}s ({max_sim_steps} steps)")
     print(f"========================================================\n")
 
     np.random.seed(seed)
 
     # 1. Load Map Assets
-    true_grid, metadata = load_map_file(map_path)
+    true_grid, metadata = load_map_file(str(resolved_map))
     start_wx, start_wy = metadata.start_world
     print(f"Loaded layout: {metadata.name} ({metadata.cols}x{metadata.rows} cells)")
     print(f"Start world position: ({start_wx:.2f}, {start_wy:.2f})")
@@ -110,16 +169,28 @@ def run_pygame_sim(
     running = True
 
     step_count = 0
+    exit_reason = "COMPLETE"
     while running and mission.state != MissionState.COMPLETE:
         # Check GUI events
         gui_running, pause_toggled, reset_req = viewer.process_events()
         if not gui_running:
+            exit_reason = "INTERRUPTED"
             break
         if pause_toggled:
             paused = not paused
         if reset_req:
             print("Restarting mission...")
-            return run_pygame_sim(map_path, headless, max_flight_time_s, enable_yolo, seed)
+            return run_pygame_sim(
+                map_path=map_path,
+                headless=headless,
+                max_flight_time_s=max_flight_time_s,
+                hard_time_limit_s=hard_time_limit_s,
+                max_sim_steps=max_sim_steps,
+                enable_yolo=enable_yolo,
+                seed=seed,
+                mode=mode,
+                output_json=output_json,
+            )
 
         if paused:
             time.sleep(0.05)
@@ -128,6 +199,12 @@ def run_pygame_sim(
         sim_time += sim_dt
         step_count += 1
         sensor_hub.advance_time(sim_dt)
+
+        # Check hard simulation limits
+        if sim_time >= hard_time_limit_s or step_count >= max_sim_steps:
+            print(f"[LIMIT REACHED] Hard mission limit reached (sim_time={sim_time:.1f}s / {hard_time_limit_s:.1f}s, steps={step_count} / {max_sim_steps}). Ending mission.")
+            exit_reason = "TIMEOUT"
+            break
 
         # Step 4a: Poll IMU & Predict EKF
         imu = sensor_hub.read_imu()
@@ -194,10 +271,6 @@ def run_pygame_sim(
                   f"Cov: {cov_p:4.1f}% | "
                   f"Survivors: {len(mission.tracker.confirmed_survivors)}/6")
 
-        if sim_time >= max_flight_time_s + 30.0:
-            print("Flight time ceiling reached, finalizing mission.")
-            break
-
         # Step 4d: Autonomy Mission Coordinator Update
         drone_state = ekf.get_state(sim_time)
         cmd = mission.update(
@@ -220,6 +293,12 @@ def run_pygame_sim(
             true_pos=true_phys.position,
             is_collision=is_coll,
         )
+
+        # Failsafe checks
+        if true_phys.battery_pct <= 0.0:
+            print("[FAILSAFE] Battery depleted.")
+            exit_reason = "FAILSAFE"
+            break
 
         # Step 4f: Render UI
         if not headless and step_count % 2 == 0:
@@ -247,28 +326,44 @@ def run_pygame_sim(
             )
 
     # 5. Final Report & Performance Evaluation
+    if mission.state == MissionState.COMPLETE:
+        exit_reason = "COMPLETE"
+    elif exit_reason == "COMPLETE":
+        exit_reason = "TIMEOUT"
+
     final_true = drone.get_state()
     confirmed = [s.estimated_pos for s in mission.tracker.confirmed_survivors]
     explored_cells = int(np.sum((grid_map.log_odds < grid_map.l_free * 0.5)))
+    frontiers_seen = mission.frontier_detector.total_frontiers_seen
     metrics = logger.compute_metrics(
         flight_time_s=sim_time,
         explored_free_cells=int(explored_cells / 16),
         confirmed_survivors=confirmed,
         start_world=(start_wx, start_wy),
         final_true_pos=final_true.position,
+        frontiers_seen=frontiers_seen,
+        exit_reason=exit_reason,
     )
 
+    if output_json:
+        metrics.save_json(output_json)
+        print(f"Metrics saved to: {output_json}")
+
     print("\n=================== MISSION REPORT ===================")
-    print(f"Final State:          {mission.state.name}")
-    print(f"Total Flight Time:    {metrics.total_time_s:.1f} s")
-    print(f"Distance Traveled:    {metrics.distance_traveled_m:.2f} m")
-    print(f"Estimated Coverage:   {metrics.coverage_percentage:.1f}%")
-    print(f"Survivors Located:    {metrics.survivors_found} / {metrics.total_survivors}")
-    print(f"False Positives:      {metrics.false_positives}")
-    print(f"Return-to-Home Error: {metrics.return_home_error_m:.2f} m (Target: < 1.0 m)")
+    print(f"Final State:             {mission.state.name}")
+    print(f"Exit Reason:             {metrics.exit_reason} (Exit Code: {metrics.exit_code})")
+    print(f"Took Off:                {'YES' if metrics.took_off else 'NO'}")
+    print(f"Pose Estimate Valid:     {'YES' if metrics.pose_estimate_valid else 'NO'}")
+    print(f"Frontiers Discovered:    {metrics.frontiers_seen}")
+    print(f"Total Flight Time:       {metrics.total_time_s:.1f} s")
+    print(f"Distance Traveled:       {metrics.distance_traveled_m:.2f} m")
+    print(f"Estimated Coverage:      {metrics.coverage_percentage:.1f}%")
+    print(f"Survivors Located:       {metrics.survivors_found} / {metrics.total_survivors}")
+    print(f"False Positives:         {metrics.false_positives}")
+    print(f"Return-to-Home Error:    {metrics.return_home_error_m:.2f} m (Target: < 1.0 m)")
     print(f"Mean Localization Drift: {metrics.mean_drift_m:.2f} m")
     print(f"Peak Localization Drift: {metrics.max_drift_m:.2f} m")
-    print(f"Collisions:           {metrics.collisions}")
+    print(f"Collisions:              {metrics.collisions}")
     print("======================================================\n")
 
     return metrics
@@ -279,19 +374,28 @@ def main():
     parser.add_argument("--map", default="maps/house_00042.json", help="Path to map JSON file")
     parser.add_argument("--backend", choices=["pygame", "gazebo"], default="pygame", help="Simulation backend")
     parser.add_argument("--headless", action="store_true", help="Run without graphical display")
-    parser.add_argument("--max-time", type=float, default=240.0, help="Maximum flight time in seconds")
+    parser.add_argument("--max-time", type=float, default=None, help="Maximum flight time in seconds")
+    parser.add_argument("--hard-limit", type=float, default=None, help="Hard simulation time ceiling in seconds")
+    parser.add_argument("--max-steps", type=int, default=None, help="Maximum simulation steps")
+    parser.add_argument("--mode", choices=["house", "maze"], default=None, help="Map type if generating on the fly")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--no-yolo", action="store_true", help="Disable YOLO object detection")
+    parser.add_argument("--output-json", default=None, help="Path to save metrics JSON")
     args = parser.parse_args()
 
     if args.backend == "pygame":
-        run_pygame_sim(
+        metrics = run_pygame_sim(
             map_path=args.map,
             headless=args.headless,
             max_flight_time_s=args.max_time,
+            hard_time_limit_s=args.hard_limit,
+            max_sim_steps=args.max_steps,
             enable_yolo=not args.no_yolo,
             seed=args.seed,
+            mode=args.mode,
+            output_json=args.output_json,
         )
+        sys.exit(metrics.exit_code)
     elif args.backend == "gazebo":
         print("Launching Gazebo Harmonic ROS 2 mission bridge...")
         # Gazebo ROS2 bridge launch invocation

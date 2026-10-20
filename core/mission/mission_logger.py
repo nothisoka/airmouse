@@ -1,9 +1,11 @@
 """Mission Logger for tracking exploration statistics and benchmarking."""
 from __future__ import annotations
 
+import json
 import math
-from dataclasses import dataclass, field
-from typing import List, Tuple
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 import numpy as np
 
 
@@ -19,6 +21,19 @@ class MissionMetrics:
     mean_drift_m: float = 0.0
     max_drift_m: float = 0.0
     collisions: int = 0
+    took_off: bool = True
+    pose_estimate_valid: bool = True
+    frontiers_seen: int = 0
+    exit_reason: str = "COMPLETE"
+    exit_code: int = 0
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    def save_json(self, path: str | Path):
+        p = Path(path)
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(self.to_dict(), indent=2))
 
 
 class MissionLogger:
@@ -56,6 +71,8 @@ class MissionLogger:
         confirmed_survivors: List[Tuple[float, float]],
         start_world: Tuple[float, float],
         final_true_pos: np.ndarray,
+        frontiers_seen: int = 0,
+        exit_reason: str = "COMPLETE",
     ) -> MissionMetrics:
         # Distance traveled
         dist = 0.0
@@ -84,6 +101,14 @@ class MissionLogger:
         mean_drift = float(np.mean(self.drifts)) if self.drifts else 0.0
         max_drift = float(np.max(self.drifts)) if self.drifts else 0.0
 
+        # Assess takeoff and pose validity
+        took_off = (dist > 0.5) or (len(self.traj_true) > 0 and final_true_pos[2] >= 0.3)
+        pose_valid = (max_drift < 5.0) and not any(
+            math.isnan(p[0]) or math.isnan(p[1]) for p in self.traj_est
+        )
+
+        exit_code = 0 if exit_reason == "COMPLETE" else 1
+
         return MissionMetrics(
             total_time_s=flight_time_s,
             distance_traveled_m=dist,
@@ -95,4 +120,9 @@ class MissionLogger:
             mean_drift_m=mean_drift,
             max_drift_m=max_drift,
             collisions=self.collisions,
+            took_off=took_off,
+            pose_estimate_valid=pose_valid,
+            frontiers_seen=frontiers_seen,
+            exit_reason=exit_reason,
+            exit_code=exit_code,
         )

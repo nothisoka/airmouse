@@ -7,24 +7,59 @@ evaluates performance metrics, and generates a formatted Markdown report.
 from __future__ import annotations
 
 import argparse
+import random
 import sys
 import time
 from pathlib import Path
+from typing import List
 import numpy as np
 
+try:
+    from airmouse.tools import generate_maps
+except ImportError:
+    import generate_maps
 from airmouse.run import run_pygame_sim
+
+
+def ensure_benchmark_maps(maps_dir: Path, num_houses: int = 10, num_mazes: int = 10) -> List[Path]:
+    """Generate reproducible benchmark layouts at runtime into maps_dir using fixed seeds."""
+    maps_dir.mkdir(parents=True, exist_ok=True)
+    generated = []
+
+    # 1. Generate houses with fixed seeds 101..110
+    for i in range(num_houses):
+        seed = 101 + i
+        name = f"house_{seed:05d}"
+        json_path = maps_dir / f"{name}.json"
+        if not json_path.exists():
+            rng = random.Random(seed)
+            grid = generate_maps.gen_house(28, 20, rng)
+            start = generate_maps.pick_start(grid, (2, 2))
+            generate_maps.add_obstacles(grid, rng, 5, avoid=start)
+            people = generate_maps.place_people(grid, start, min(6, 1 + (seed % 6)), rng)
+            generate_maps.export_map(grid, start, people, seed, "house", 1.0, maps_dir, name)
+        generated.append(json_path)
+
+    # 2. Generate mazes with fixed seeds 201..210
+    for i in range(num_mazes):
+        seed = 201 + i
+        name = f"maze_{seed:05d}"
+        json_path = maps_dir / f"{name}.json"
+        if not json_path.exists():
+            rng = random.Random(seed)
+            grid = generate_maps.gen_maze(28, 20, rng)
+            start = generate_maps.pick_start(grid, (1, 1))
+            generate_maps.add_obstacles(grid, rng, 3, avoid=start)
+            people = generate_maps.place_people(grid, start, min(6, 1 + (seed % 6)), rng)
+            generate_maps.export_map(grid, start, people, seed, "maze", 1.0, maps_dir, name)
+        generated.append(json_path)
+
+    return generated
 
 
 def run_benchmarks(maps_dir: str = "generated_maps", max_time_per_map: float = 60.0):
     p = Path(maps_dir)
-    house_files = sorted(list(p.glob("house_001*.json")))
-    maze_files = sorted(list(p.glob("maze_002*.json")))
-    if len(house_files) >= 10 and len(maze_files) >= 10:
-        map_files = house_files[:10] + maze_files[:10]
-    else:
-        map_files = sorted(list(p.glob("house_*.json")) + list(p.glob("maze_*.json")))[:20]
-    if len(map_files) < 20:
-        print(f"Warning: Found {len(map_files)} maps, expected at least 20.")
+    map_files = ensure_benchmark_maps(p, num_houses=10, num_mazes=10)
 
     print(f"\n==================================================================")
     print(f"  NIDAR AIRMOUSE: Acceptance Benchmark Suite (20 Random Layouts)")

@@ -122,15 +122,20 @@ In RViz, you can simultaneously view:
 
 ---
 
-## 4. Map Generation & Adding Custom Layouts
+## 4. Map Generation & Procedural Layouts
 
-To generate procedural house or maze layouts with survivors:
+AirMouse uses fixed seeds and procedural generation to test across arbitrary building layouts.
+Only sample maps (`maps/house_00042.*` and `maps/maze_00200.*`) are tracked in git. All runtime layouts and benchmark tests generate maps dynamically into `generated_maps/` (which is git-ignored):
+
 ```bash
-# Generate 5 house layouts with 1-6 survivors:
-python generate_maps.py --count 5 --mode house --seed 42 --out maps/
+# Generate 5 house layouts with 1-6 survivors into generated_maps/:
+python generate_maps.py --count 5 --mode house --seed 101 --out generated_maps/
 
-# Generate 3 maze layouts:
-python generate_maps.py --count 3 --mode maze --persons 4 --out maps/
+# Generate 5 maze layouts:
+python generate_maps.py --count 5 --mode maze --seed 201 --out generated_maps/
+
+# Execute the 20-layout reproducible benchmark suite:
+python tools/benchmark_suite.py --maps-dir generated_maps --time-per-map 60.0
 ```
 Each layout generates:
 - `<name>.json`: Grid geometry, start pose, hidden survivor coordinates

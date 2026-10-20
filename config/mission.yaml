@@ -1,7 +1,9 @@
 # Mission Limits, Failsafes and Survivor Target
 mission:
   max_survivors: 6
-  max_flight_time_s: 360.0      # 6 minute flight budget
+  max_flight_time_s: 240.0      # Planned flight budget
+  hard_time_limit_s: 280.0      # Hard simulation time ceiling
+  max_sim_steps: 28000          # Hard simulation step ceiling (100 Hz * 280s)
   battery_capacity_mah: 2200
   nominal_current_draw_a: 12.0
   low_battery_threshold_pct: 25.0
