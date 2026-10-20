@@ -75,7 +75,7 @@ Ultrasonic sensors feature a ~15° beam divergence cone. AirMouse casts multiple
 
 ## 3. Quickstart & Usage
 
-### 3.1 Prerequisites & Virtual Environment
+### 3.1 Prerequisites, Virtual Environment & Installation
 ```bash
 # Ubuntu 24.04 with ROS 2 Jazzy and Gazebo Harmonic
 python3 -m venv --system-site-packages ~/airmouse_venv
@@ -83,6 +83,10 @@ source ~/airmouse_venv/bin/activate
 
 # Install Python dependencies (pin numpy<2 for cv_bridge compatibility)
 pip install "numpy<2" pygame opencv-python ultralytics pyyaml
+
+# Install airmouse in editable mode:
+cd ~/airmouse
+pip install -e .
 ```
 
 ### 3.2 Running the 2D/2.5D Simulation (Pygame)
@@ -138,10 +142,10 @@ Each layout generates:
 
 ## 5. Verification & Automated Testing
 
-Run the full pytest suite:
+Run the full pytest suite (with no environment variables needed after editable install):
 ```bash
 source ~/airmouse_venv/bin/activate
-PYTHONPATH=. pytest -v tests/
+pytest -v tests/
 ```
 Tests cover:
 - `test_zero_ground_truth.py`: Enforces architectural isolation (0 illegal imports in `core/`)

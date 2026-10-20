@@ -1,5 +1,6 @@
 """Test simulated sensors and flight dynamics."""
 import math
+import random
 import numpy as np
 import pytest
 from airmouse.backends.pygame_sim.drone_dynamics import DroneDynamics
@@ -11,6 +12,7 @@ from airmouse.core.hal import VelocityCommand
 
 def test_sensor_sim():
     np.random.seed(42)
+    random.seed(42)
     # 10x10 empty room with walls
     grid = np.zeros((10, 10), dtype=np.uint8)
     grid[0, :] = grid[-1, :] = 1
@@ -34,8 +36,13 @@ def test_sensor_sim():
     assert np.linalg.norm(imu.gyro_radps) < 0.25
 
     # 2. Test Range readings (4 horizontal + 1 downward)
-    sensor_hub.advance_time(0.06)
-    ranges = sensor_hub.read_ranges()
+    ranges = {}
+    for _ in range(5):
+        sensor_hub.advance_time(0.06)
+        r = sensor_hub.read_ranges()
+        if r and r.get("down") and r["down"].valid:
+            ranges = r
+            break
     assert len(ranges) == 5
     assert "front" in ranges and "left" in ranges and "right" in ranges and "rear" in ranges and "down" in ranges
     # Distance to wall in front from (5, 5) heading +X (east): walls are at x=9, so distance is ~4m

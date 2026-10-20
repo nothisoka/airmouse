@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "airmouse"
+version = "0.1.0"
+description = "NIDAR AirMouse Autonomous Drone Simulation and Autonomy Stack"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy<2",
+    "opencv-python",
+    "pygame",
+    "ultralytics",
+    "pyyaml",
+]
+
+[tool.setuptools]
+package-dir = {"airmouse" = "."}
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["core*", "backends*", "tools*", "config*"]
+
