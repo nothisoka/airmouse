@@ -286,11 +286,10 @@ class SensorFusionEKF:
                 d_radial = (best_wx - x_hit) * cos_b + (best_wy - y_hit) * sin_b
                 innov = -d_radial
 
-                # Measurement Jacobian for 15-state vector:
+                # Measurement Jacobian for 15-state vector (position x, y):
                 h_row = np.zeros(15, dtype=np.float64)
                 h_row[0] = -cos_b
                 h_row[1] = -sin_b
-                h_row[8] = -r_meas * math.sin(offset) * 0.1  # mild yaw leverage
 
                 H_rows.append(h_row)
                 innovations.append(innov)
@@ -318,14 +317,10 @@ class SensorFusionEKF:
         # State correction dx = K y
         dx = K @ y
 
-        # Clamp max single-step correction for physical trajectory continuity
-        dx[0] = np.clip(dx[0], -0.15, 0.15)
-        dx[1] = np.clip(dx[1], -0.15, 0.15)
-        dx[8] = np.clip(dx[8], -0.05, 0.05)
-
-        self.x += dx
-        # Keep yaw in [-pi, pi]
-        self.x[8] = (self.x[8] + math.pi) % (2.0 * math.pi) - math.pi
+        # Clamp max single-step position correction for physical trajectory continuity
+        dx_pos = np.clip(dx[:2], -0.15, 0.15)
+        self.x[0] += dx_pos[0]
+        self.x[1] += dx_pos[1]
 
         # Joseph form covariance update: P = (I - K H) P (I - K H)^T + K R K^T
         I_15 = np.eye(15, dtype=np.float64)
