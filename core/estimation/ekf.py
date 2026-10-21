@@ -59,6 +59,7 @@ class SensorFusionEKF:
         self.last_cam_time = -1.0
         self.alt_filter = AltitudeFilter(init_z=float(init_pos[2]))
         self.vo = VisualOdometry()
+        self.last_vo_meas: Optional[np.ndarray] = None
 
         self.g_const = 9.80665
 
@@ -194,6 +195,8 @@ class SensorFusionEKF:
         )
         if not valid or vel_body is None:
             return
+
+        self.last_vo_meas = vel_body.copy()
 
         # Transform body velocity [vx_body, vy_body] to world frame [vx_world, vy_world]
         yaw = self.x[8]

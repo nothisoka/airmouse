@@ -92,4 +92,19 @@ To rigorously test whether state estimation error is the sole blocker preventing
 4. **Survivor detection:**
    - YOLO detection on CPU requires adequate forward facing camera views near survivors to register $\ge 3$ detections. With true pose established, perception ray projection accuracy is guaranteed; survivor localization can now be systematically solved.
 
+---
+
+## 6. Phase: Estimation Diagnosis — Step 2: Error Breakdown Over Time
+
+Telemetry was logged at 20 Hz over a 150-second flight in `house_00101` and saved to `generated_maps/drift_breakdown_house_00101.csv` and plotted in `generated_maps/drift_breakdown_house_00101.png`.
+
+### Quantitative Error Decomposition:
+- **Total Mean Horizontal Position Drift:** **$7.49\text{ m}$** (Peak: **$13.55\text{ m}$**).
+- **Altitude Error ($z$):** **$0.060\text{ m}$** (Strictly bounded and stable due to direct downward sonar innovation gating).
+- **Heading / Yaw Error:** Mean **$3.20^\circ$** (Peak: **$8.76^\circ$**).
+- **Along-Track Error (Scale Drift):** Mean **$4.91\text{ m}$**. Caused by overestimation of optical flow displacement ($dv \propto dx$) during forward acceleration, leading to estimated position advancing faster than physical ground truth.
+- **Cross-Track Error (Heading Rotation Drift):** Mean **$4.71\text{ m}$**. Caused by small gyro random walk drift ($3^\circ - 8^\circ$) rotating the velocity vector in the world frame; integrated over $>100\text{ m}$ of path, a $4^\circ$ heading error creates $\approx 7\text{ m}$ of lateral displacement.
+- **Conclusion:** Horizontal position drift is roughly an equal split between **along-track forward scale bias** ($51\%$) and **cross-track heading projection error** ($49\%$). Because sonars observe surrounding walls, **scan-to-map correction** is uniquely positioned to directly eliminate both errors.
+
+
 
