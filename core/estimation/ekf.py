@@ -228,7 +228,7 @@ class SensorFusionEKF:
         self.x[10] -= (-ba_world_x * sin_y + ba_world_y * cos_y)
 
     def update_scan_to_map(self, ranges: Dict[str, RangeData], grid_map):
-        """Scan-to-map matching using horizontal ultrasonic sensors to bound position drift."""
+        """Scan-to-map EKF measurement update using sonar ranges against the online occupancy grid."""
         est_x, est_y = float(self.x[0]), float(self.x[1])
         est_yaw = float(self.x[8])
 
@@ -239,48 +239,99 @@ class SensorFusionEKF:
             "rear": math.pi,
         }
 
-        A_rows = []
-        b_vals = []
+        H_rows = []
+        innovations = []
+
+        res = grid_map.res
+        search_radius_cells = 3  # +/- 0.75m search window
 
         for sid, offset in yaw_offsets.items():
             if sid not in ranges or not ranges[sid].valid:
                 continue
 
             r_meas = ranges[sid].range_m
-            if r_meas >= 3.8 or r_meas <= 0.25:
+            # Only use reliable reflections from walls within range
+            if r_meas >= 3.6 or r_meas <= 0.35:
                 continue
 
             beam_angle = est_yaw + offset
             cos_b = math.cos(beam_angle)
             sin_b = math.sin(beam_angle)
 
-            # Raycast against grid_map to find expected obstacle distance
-            r_expected = self._raycast_map(est_x, est_y, beam_angle, grid_map, max_d=4.0)
-            if r_expected is not None and abs(r_meas - r_expected) < 0.40:
-                diff = r_meas - r_expected
-                A_rows.append([cos_b, sin_b])
-                b_vals.append(-diff)
+            # Expected hit point in world frame if pose was exact
+            x_hit = est_x + r_meas * cos_b
+            y_hit = est_y + r_meas * sin_b
 
-        if len(A_rows) >= 2:
-            A = np.array(A_rows)
-            b = np.array(b_vals)
-            ATA = A.T @ A
-            w, V = np.linalg.eigh(ATA)
-            dp = np.zeros(2)
-            g = A.T @ b
-            applied = False
-            for i in range(2):
-                if w[i] > 0.4:  # Only correct along observed/constrained spatial directions
-                    comp = float(np.dot(V[:, i], g) / (w[i] + 0.15))
-                    dp += comp * V[:, i]
-                    applied = True
+            gx0, gy0 = grid_map.world_to_grid(x_hit, y_hit)
 
-            if applied:
-                self.x[0] += np.clip(dp[0], -0.08, 0.08)
-                self.x[1] += np.clip(dp[1], -0.08, 0.08)
-                # Reduce position covariance
-                self.P[0, 0] = max(0.01, self.P[0, 0] * 0.95)
-                self.P[1, 1] = max(0.01, self.P[1, 1] * 0.95)
+            # Search in a local neighborhood for established occupied wall cells
+            best_dist = 1e9
+            best_wx, best_wy = None, None
+
+            for dy in range(-search_radius_cells, search_radius_cells + 1):
+                gy = gy0 + dy
+                for dx in range(-search_radius_cells, search_radius_cells + 1):
+                    gx = gx0 + dx
+                    if grid_map.in_bounds(gx, gy) and grid_map.is_occupied(gx, gy):
+                        wx = (gx + 0.5) * res + grid_map.origin_x
+                        wy = (gy + 0.5) * res + grid_map.origin_y
+                        d_pt = math.hypot(wx - x_hit, wy - y_hit)
+                        if d_pt < best_dist:
+                            best_dist = d_pt
+                            best_wx, best_wy = wx, wy
+
+            # If a corresponding map wall was found within search gate
+            if best_wx is not None and best_dist <= 0.85:
+                # Radial distance error along beam
+                d_radial = (best_wx - x_hit) * cos_b + (best_wy - y_hit) * sin_b
+                innov = -d_radial
+
+                # Measurement Jacobian for 15-state vector:
+                h_row = np.zeros(15, dtype=np.float64)
+                h_row[0] = -cos_b
+                h_row[1] = -sin_b
+                h_row[8] = -r_meas * math.sin(offset) * 0.1  # mild yaw leverage
+
+                H_rows.append(h_row)
+                innovations.append(innov)
+
+        if not H_rows:
+            return
+
+        H = np.array(H_rows, dtype=np.float64)
+        y = np.array(innovations, dtype=np.float64)
+        m = len(innovations)
+
+        # Measurement noise covariance R (independent sonar beams)
+        R = np.eye(m, dtype=np.float64) * (0.04**2)
+
+        # Kalman innovation covariance S = H P H^T + R
+        S = H @ self.P @ H.T + R
+        try:
+            S_inv = np.linalg.inv(S)
+        except np.linalg.LinAlgError:
+            return
+
+        # Kalman gain K = P H^T S^-1 (15 x m)
+        K = self.P @ H.T @ S_inv
+
+        # State correction dx = K y
+        dx = K @ y
+
+        # Clamp max single-step correction for physical trajectory continuity
+        dx[0] = np.clip(dx[0], -0.15, 0.15)
+        dx[1] = np.clip(dx[1], -0.15, 0.15)
+        dx[8] = np.clip(dx[8], -0.05, 0.05)
+
+        self.x += dx
+        # Keep yaw in [-pi, pi]
+        self.x[8] = (self.x[8] + math.pi) % (2.0 * math.pi) - math.pi
+
+        # Joseph form covariance update: P = (I - K H) P (I - K H)^T + K R K^T
+        I_15 = np.eye(15, dtype=np.float64)
+        IKH = I_15 - K @ H
+        self.P = IKH @ self.P @ IKH.T + K @ R @ K.T
+        self.P = 0.5 * (self.P + self.P.T)
 
     def _raycast_map(self, x0: float, y0: float, angle: float, grid_map, max_d: float = 4.0):
         cos_a = math.cos(angle)

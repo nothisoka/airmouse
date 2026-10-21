@@ -176,8 +176,8 @@ class VisualOdometry:
         vx_estimates = (dv_sel / (self.focal_length * (denom**2) / effective_alt)) / dt
         vy_estimates = (du_sel / (self.focal_length * denom / effective_alt)) / dt
         # Calibrated subpixel Lucas-Kanade response factors with center corridor mask
-        calib_factor_x = 1.30
-        calib_factor_y = 1.00
+        calib_factor_x = 1.035
+        calib_factor_y = 1.000
         vx_body = float(np.median(vx_estimates)) * calib_factor_x
         vy_body = float(np.median(vy_estimates)) * calib_factor_y
 
