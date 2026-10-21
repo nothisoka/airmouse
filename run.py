@@ -31,7 +31,7 @@ from airmouse.core.perception.yolo_detector import YoloDetector
 from airmouse.core.perception.ray_projector import GroundRayProjector
 from airmouse.core.mission.state_machine import MissionCoordinator, MissionState
 from airmouse.core.mission.mission_logger import MissionLogger
-from airmouse.core.hal import PoseQuality
+from airmouse.core.hal import DroneState, PoseQuality
 
 from airmouse.backends.pygame_sim.drone_dynamics import DroneDynamics
 from airmouse.backends.pygame_sim.world_renderer import WorldRenderer
@@ -46,6 +46,41 @@ def load_mission_config() -> dict:
         with open(cfg_path, "r") as f:
             return yaml.safe_load(f) or {}
     return {}
+
+
+def make_drone_state_from_physical(phys, sim_time: float) -> DroneState:
+    return DroneState(
+        timestamp_s=sim_time,
+        position=phys.position.copy(),
+        velocity=phys.velocity.copy(),
+        attitude_rpy=phys.attitude_rpy.copy(),
+        quaternion=np.array([1.0, 0.0, 0.0, 0.0]),
+        accel_bias=np.zeros(3),
+        gyro_bias=np.zeros(3),
+        covariance_diag=np.zeros(9),
+        quality=PoseQuality.EXCELLENT,
+    )
+
+
+def compute_true_room_coverage(true_grid: np.ndarray, grid_map: OccupancyGrid, cell_size_m: float = 1.0) -> float:
+    """Compute percentage of true free floor cells observed as free in the occupancy map."""
+    rows, cols = true_grid.shape
+    total_free = 0
+    explored_free = 0
+    for y in range(rows):
+        for x in range(cols):
+            if true_grid[y, x] == 0:  # free room cell
+                total_free += 1
+                # Center in world coordinates (row 0 = top/max Y)
+                wx = (x + 0.5) * cell_size_m
+                wy = (rows - 1 - y + 0.5) * cell_size_m
+                gx, gy = grid_map.world_to_grid(wx, wy)
+                if 0 <= gx < grid_map.cols and 0 <= gy < grid_map.rows:
+                    if grid_map.log_odds[gy, gx] < 0.0:  # observed as free space
+                        explored_free += 1
+    if total_free == 0:
+        return 0.0
+    return float(explored_free / total_free) * 100.0
 
 
 def resolve_or_generate_map(map_path: str, seed: int = 42, mode: Optional[str] = None) -> Path:
@@ -85,6 +120,7 @@ def run_pygame_sim(
     seed: int = 42,
     mode: Optional[str] = None,
     output_json: Optional[str] = None,
+    debug_true_pose: bool = False,
 ):
     resolved_map = resolve_or_generate_map(map_path, seed=seed, mode=mode)
 
@@ -222,15 +258,17 @@ def run_pygame_sim(
                 drone_state = ekf.get_state(sim_time)
 
             # Update occupancy grid with horizontal sensor beams
-            est_yaw = drone_state.attitude_rpy[2]
-            est_x, est_y = drone_state.position[0], drone_state.position[1]
+            true_phys = drone.get_state()
+            active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
+            map_yaw = active_pose.attitude_rpy[2]
+            map_x, map_y = active_pose.position[0], active_pose.position[1]
             yaw_offsets = {"front": 0.0, "left": math.pi / 2.0, "right": -math.pi / 2.0, "rear": math.pi}
             for sid, offset in yaw_offsets.items():
                 if sid in ranges:
                     grid_map.update_beam(
-                        start_wx=est_x,
-                        start_wy=est_y,
-                        angle_rad=est_yaw + offset,
+                        start_wx=map_x,
+                        start_wy=map_y,
+                        angle_rad=map_yaw + offset,
                         range_m=ranges[sid].range_m,
                         valid_hit=ranges[sid].valid,
                     )
@@ -249,21 +287,22 @@ def run_pygame_sim(
                 latest_detections = yolo.detect(cam.image_bgr)
                 for det in latest_detections:
                     u_b, v_b = det.bottom_center
+                    true_phys = drone.get_state()
+                    active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
                     ground_coords = ray_projector.project_pixel_to_ground(
                         pixel_u=u_b,
                         pixel_v=v_b,
-                        drone_pos_world=drone_state.position,
-                        drone_yaw=drone_state.attitude_rpy[2],
-                        drone_pitch=drone_state.attitude_rpy[1],
-                        drone_roll=drone_state.attitude_rpy[0],
+                        drone_pos_world=active_pose.position,
+                        drone_yaw=active_pose.attitude_rpy[2],
+                        drone_pitch=active_pose.attitude_rpy[1],
+                        drone_roll=active_pose.attitude_rpy[0],
                     )
                     if ground_coords is not None:
                         mission.tracker.update(ground_coords, det.confidence)
 
         # Periodic status logging in terminal
         if step_count % 200 == 0:  # every 2.0 simulation seconds
-            cov_cells = int(np.sum((grid_map.log_odds < grid_map.l_free * 0.5)))
-            cov_p = min(100.0, (cov_cells / (total_free_cells * 16)) * 100.0)
+            cov_p = compute_true_room_coverage(true_grid, grid_map, metadata.cell_size_m)
             print(f"[t={sim_time:5.1f}s] State: {mission.state.name:<11} | "
                   f"Pos: ({drone_state.position[0]:.2f}, {drone_state.position[1]:.2f}) | "
                   f"Alt: {drone_state.position[2]:.2f}m | "
@@ -273,9 +312,11 @@ def run_pygame_sim(
 
         # Step 4d: Autonomy Mission Coordinator Update
         drone_state = ekf.get_state(sim_time)
+        true_phys = drone.get_state()
+        active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
         cmd = mission.update(
             current_time_s=sim_time,
-            drone_state=drone_state,
+            drone_state=active_pose,
             ranges=ranges,
         )
 
@@ -292,6 +333,7 @@ def run_pygame_sim(
             est_pos=drone_state.position,
             true_pos=true_phys.position,
             is_collision=is_coll,
+            sim_time=sim_time,
         )
 
         # Failsafe checks
@@ -302,9 +344,7 @@ def run_pygame_sim(
 
         # Step 4f: Render UI
         if not headless and step_count % 2 == 0:
-            # Count explored free cells
-            explored_cells = int(np.sum((grid_map.log_odds < grid_map.l_free * 0.5)))
-            cov_pct = min(100.0, (explored_cells / (total_free_cells * 16)) * 100.0)
+            cov_pct = compute_true_room_coverage(true_grid, grid_map, metadata.cell_size_m)
 
             cam_img = cam.image_bgr if cam is not None else np.zeros((240, 320, 3), dtype=np.uint8)
             viewer.render(
@@ -333,11 +373,12 @@ def run_pygame_sim(
 
     final_true = drone.get_state()
     confirmed = [s.estimated_pos for s in mission.tracker.confirmed_survivors]
-    explored_cells = int(np.sum((grid_map.log_odds < grid_map.l_free * 0.5)))
+    cov_pct = compute_true_room_coverage(true_grid, grid_map, metadata.cell_size_m)
+    explored_cells = int((cov_pct / 100.0) * total_free_cells)
     frontiers_seen = mission.frontier_detector.total_frontiers_seen
     metrics = logger.compute_metrics(
         flight_time_s=sim_time,
-        explored_free_cells=int(explored_cells / 16),
+        explored_free_cells=explored_cells,
         confirmed_survivors=confirmed,
         start_world=(start_wx, start_wy),
         final_true_pos=final_true.position,
@@ -352,12 +393,13 @@ def run_pygame_sim(
     print("\n=================== MISSION REPORT ===================")
     print(f"Final State:             {mission.state.name}")
     print(f"Exit Reason:             {metrics.exit_reason} (Exit Code: {metrics.exit_code})")
+    print(f"Mission Success:         {'YES' if metrics.success else 'NO'}")
     print(f"Took Off:                {'YES' if metrics.took_off else 'NO'}")
     print(f"Pose Estimate Valid:     {'YES' if metrics.pose_estimate_valid else 'NO'}")
     print(f"Frontiers Discovered:    {metrics.frontiers_seen}")
     print(f"Total Flight Time:       {metrics.total_time_s:.1f} s")
     print(f"Distance Traveled:       {metrics.distance_traveled_m:.2f} m")
-    print(f"Estimated Coverage:      {metrics.coverage_percentage:.1f}%")
+    print(f"Room Coverage:           {metrics.coverage_percentage:.1f}%")
     print(f"Survivors Located:       {metrics.survivors_found} / {metrics.total_survivors}")
     print(f"False Positives:         {metrics.false_positives}")
     print(f"Return-to-Home Error:    {metrics.return_home_error_m:.2f} m (Target: < 1.0 m)")
@@ -381,6 +423,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--no-yolo", action="store_true", help="Disable YOLO object detection")
     parser.add_argument("--output-json", default=None, help="Path to save metrics JSON")
+    parser.add_argument("--debug-true-pose", action="store_true", help="Debug-only: feed true pose to mapper and planner")
     args = parser.parse_args()
 
     if args.backend == "pygame":
@@ -394,6 +437,7 @@ def main():
             seed=args.seed,
             mode=args.mode,
             output_json=args.output_json,
+            debug_true_pose=args.debug_true_pose,
         )
         sys.exit(metrics.exit_code)
     elif args.backend == "gazebo":

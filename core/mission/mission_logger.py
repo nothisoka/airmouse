@@ -26,6 +26,7 @@ class MissionMetrics:
     frontiers_seen: int = 0
     exit_reason: str = "COMPLETE"
     exit_code: int = 0
+    success: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -46,21 +47,24 @@ class MissionLogger:
         self.traj_true: List[Tuple[float, float]] = []
         self.collisions: int = 0
         self.in_collision: bool = False
+        self.last_collision_time: float = -10.0
 
     def record_step(
         self,
         est_pos: np.ndarray,
         true_pos: np.ndarray,
         is_collision: bool = False,
+        sim_time: float = 0.0,
     ):
         drift = float(np.linalg.norm(est_pos[:2] - true_pos[:2]))
         self.drifts.append(drift)
         self.traj_est.append((float(est_pos[0]), float(est_pos[1])))
         self.traj_true.append((float(true_pos[0]), float(true_pos[1])))
         if is_collision:
-            if not self.in_collision:
+            if not self.in_collision or (sim_time - self.last_collision_time >= 0.5):
                 self.collisions += 1
-                self.in_collision = True
+                self.last_collision_time = sim_time
+            self.in_collision = True
         else:
             self.in_collision = False
 
@@ -107,6 +111,9 @@ class MissionLogger:
             math.isnan(p[0]) or math.isnan(p[1]) for p in self.traj_est
         )
 
+        # Success criteria: located ALL survivors AND landed within 1.0m of launch
+        success = (found == len(self.true_survivors)) and (rth_err < 1.0) and (exit_reason == "COMPLETE")
+
         exit_code = 0 if exit_reason == "COMPLETE" else 1
 
         return MissionMetrics(
@@ -125,4 +132,5 @@ class MissionLogger:
             frontiers_seen=frontiers_seen,
             exit_reason=exit_reason,
             exit_code=exit_code,
+            success=success,
         )
