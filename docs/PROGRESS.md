@@ -172,6 +172,24 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
    - The occupancy grid itself is constructed online from the estimated pose. In large open rooms (e.g. `house_00103`), when the drone moves far from walls ($>3.6\text{ m}$), sonars return no echoes, leaving the system on dead reckoning.
    - When the drone returns toward a wall, the wall cells in the map have already been mapped with an offset. Pure scan-to-map matching without a keyframe graph SLAM or loop closure can lock onto distorted map features, occasionally creating positive feedback drift.
 
+---
+
+## 9. Task Execution Log
+
+### Task A1: Environment check
+- **DO:** `pwd; git branch --show-current; git status --short; which python3; pip list | grep -i airmouse; pytest -q`
+- **Output:**
+  ```text
+  /home/sriram/airmouse
+  autonomy-work
+  /home/sriram/airmouse/.venv/bin/python3
+  airmouse                             0.1.0           /home/sriram/airmouse
+  ..........                                                               [100%]
+  10 passed in 6.89s
+  ```
+- **Result:** Branch is `autonomy-work`, python3 is `/home/sriram/airmouse/.venv/bin/python3`, working tree was clean, pytest passes (10 passed).
+
+
 
 
 
