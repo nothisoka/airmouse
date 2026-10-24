@@ -11,6 +11,7 @@ import numpy as np
 
 @dataclass
 class MissionMetrics:
+    flight_time_s: float = 0.0
     total_time_s: float = 0.0
     distance_traveled_m: float = 0.0
     coverage_pct: float = 0.0
@@ -122,6 +123,7 @@ class MissionLogger:
         exit_code = 0 if exit_reason == "COMPLETE" else 1
 
         return MissionMetrics(
+            flight_time_s=flight_time_s,
             total_time_s=flight_time_s,
             distance_traveled_m=dist,
             coverage_pct=cov_pct,
