@@ -200,6 +200,27 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
 - **Check tracked maps:** `maps/maze_00200.*` and `maps/house_00042.*` (.json, .pgm, .sdf, .yaml) tracked.
 - **Result:** Hygiene verified; added explicit `*Zone*` and `scratch/` entries to `.gitignore`.
 
+### Task A3: Code map (NO code changes)
+- **DO:** Locate all 15 key subsystems using grep/ls and write `docs/CODEMAP.md`.
+- **Output:** Created `docs/CODEMAP.md` mapping:
+  - mission loop (`run.py` - `run_pygame_sim`)
+  - state machine (`core/mission/state_machine.py` - `MissionCoordinator.update`)
+  - frontier selection (`core/exploration/frontier_detector.py` - `FrontierDetector.find_best_frontier`)
+  - planner (A*) (`core/planning/astar.py` - `AStarPlanner.plan`)
+  - obstacle inflation (`core/mapping/occupancy_grid.py` - `OccupancyGrid.get_inflated_costmap`)
+  - controller (`core/control/pid.py` - `WaypointController.compute_command`)
+  - reactive avoidance (`core/planning/reactive_avoidance.py` - `ReactiveAvoidance.filter_command`)
+  - collision counting (`core/mission/mission_logger.py` & `backends/pygame_sim/drone_dynamics.py`)
+  - coverage computation (`run.py` & `core/mission/mission_logger.py`)
+  - exit reason (`run.py` & `core/mission/mission_logger.py`)
+  - metrics JSON writer (`core/mission/mission_logger.py` - `MissionMetrics.save_json`)
+  - debug true-pose flag (`run.py` - `--debug-true-pose`)
+  - config keys for flight time / speed / return-home (`config/mission.yaml` & `core/mission/state_machine.py`)
+  - scan-to-map correction (`core/estimation/ekf.py` - `SensorFusionEKF.update_scan_to_map`)
+  - visual odometry (`core/estimation/visual_odometry.py` - `VisualOdometry`)
+- **Result:** `docs/CODEMAP.md` created with no code changes; pytest passes (10 passed).
+
+
 
 
 

@@ -62,7 +62,7 @@ STANDARD COMMANDS
   DONE WHEN: the grep prints nothing; .gitignore covers those; maps/maze_00200.* and
   maps/house_00042.* are tracked. Fix .gitignore only by adding entries.
 
-- [ ] A3 Code map (NO code changes)
+- [x] A3 Code map (NO code changes)
   DO: use `grep -rn` / `ls` to find where each of these lives, and write docs/CODEMAP.md with
   file path + function/class name + one line each: mission loop, state machine, frontier selection,
   planner (A*), obstacle inflation, controller, reactive avoidance, collision counting, coverage
