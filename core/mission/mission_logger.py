@@ -13,6 +13,7 @@ import numpy as np
 class MissionMetrics:
     total_time_s: float = 0.0
     distance_traveled_m: float = 0.0
+    coverage_pct: float = 0.0
     coverage_percentage: float = 0.0
     survivors_found: int = 0
     total_survivors: int = 0
@@ -120,6 +121,7 @@ class MissionLogger:
         return MissionMetrics(
             total_time_s=flight_time_s,
             distance_traveled_m=dist,
+            coverage_pct=cov_pct,
             coverage_percentage=cov_pct,
             survivors_found=found,
             total_survivors=len(self.true_survivors),
