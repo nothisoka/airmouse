@@ -30,6 +30,7 @@ class MissionMetrics:
     took_off: bool = True
     pose_valid: bool = True
     pose_estimate_valid: bool = True
+    frontier_clusters_remaining: int = 0
     frontiers_seen: int = 0
     exit_reason: str = "COMPLETE"
     exit_code: int = 0
@@ -82,6 +83,7 @@ class MissionLogger:
         confirmed_survivors: List[Tuple[float, float]],
         start_world: Tuple[float, float],
         final_true_pos: np.ndarray,
+        frontier_clusters_remaining: int = 0,
         frontiers_seen: int = 0,
         exit_reason: str = "COMPLETE",
     ) -> MissionMetrics:
@@ -143,6 +145,7 @@ class MissionLogger:
             took_off=took_off,
             pose_valid=pose_valid,
             pose_estimate_valid=pose_valid,
+            frontier_clusters_remaining=frontier_clusters_remaining,
             frontiers_seen=frontiers_seen,
             exit_reason=exit_reason,
             exit_code=exit_code,

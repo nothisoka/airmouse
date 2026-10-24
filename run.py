@@ -376,12 +376,14 @@ def run_pygame_sim(
     cov_pct = compute_true_room_coverage(true_grid, grid_map, metadata.cell_size_m)
     explored_cells = int((cov_pct / 100.0) * total_free_cells)
     frontiers_seen = mission.frontier_detector.total_frontiers_seen
+    clusters_left = mission.frontier_detector.count_remaining_clusters(grid_map)
     metrics = logger.compute_metrics(
         flight_time_s=sim_time,
         explored_free_cells=explored_cells,
         confirmed_survivors=confirmed,
         start_world=(start_wx, start_wy),
         final_true_pos=final_true.position,
+        frontier_clusters_remaining=clusters_left,
         frontiers_seen=frontiers_seen,
         exit_reason=exit_reason,
     )
@@ -391,21 +393,21 @@ def run_pygame_sim(
         print(f"Metrics saved to: {output_json}")
 
     print("\n=================== MISSION REPORT ===================")
-    print(f"Final State:             {mission.state.name}")
-    print(f"Exit Reason:             {metrics.exit_reason} (Exit Code: {metrics.exit_code})")
-    print(f"Mission Success:         {'YES' if metrics.success else 'NO'}")
-    print(f"Took Off:                {'YES' if metrics.took_off else 'NO'}")
-    print(f"Pose Estimate Valid:     {'YES' if metrics.pose_estimate_valid else 'NO'}")
-    print(f"Frontiers Discovered:    {metrics.frontiers_seen}")
-    print(f"Total Flight Time:       {metrics.total_time_s:.1f} s")
-    print(f"Distance Traveled:       {metrics.distance_traveled_m:.2f} m")
-    print(f"Room Coverage:           {metrics.coverage_percentage:.1f}%")
-    print(f"Survivors Located:       {metrics.survivors_found} / {metrics.total_survivors}")
-    print(f"False Positives:         {metrics.false_positives}")
-    print(f"Return-to-Home Error:    {metrics.return_home_error_m:.2f} m (Target: < 1.0 m)")
-    print(f"Mean Localization Drift: {metrics.mean_drift_m:.2f} m")
-    print(f"Peak Localization Drift: {metrics.max_drift_m:.2f} m")
-    print(f"Collisions:              {metrics.collisions}")
+    print(f"Final State:                 {mission.state.name}")
+    print(f"Exit Reason:                 {metrics.exit_reason} (Exit Code: {metrics.exit_code})")
+    print(f"Mission Success:             {'YES' if metrics.success else 'NO'}")
+    print(f"Took Off:                    {'YES' if metrics.took_off else 'NO'}")
+    print(f"Pose Valid:                  {'YES' if metrics.pose_valid else 'NO'}")
+    print(f"Flight Time:                 {metrics.flight_time_s:.1f} s")
+    print(f"Path Length:                 {metrics.path_length_m:.2f} m")
+    print(f"Coverage:                    {metrics.coverage_pct:.1f}%")
+    print(f"Survivors Located:           {metrics.survivors_found} / {metrics.survivors_total}")
+    print(f"False Positives:             {metrics.false_positives}")
+    print(f"Return-to-Home Error:        {metrics.home_error_m:.2f} m (Target: < 1.0 m)")
+    print(f"Mean Localization Drift:     {metrics.mean_drift_m:.2f} m")
+    print(f"Peak Localization Drift:     {metrics.max_drift_m:.2f} m")
+    print(f"Collision Events:            {metrics.collision_events}")
+    print(f"Frontier Clusters Remaining: {metrics.frontier_clusters_remaining}")
     print("======================================================\n")
 
     return metrics
