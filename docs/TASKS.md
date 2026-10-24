@@ -57,7 +57,7 @@ STANDARD COMMANDS
   DONE WHEN: branch is autonomy-work; python3 is ~/airmouse/.venv/bin/python3; pytest passes.
   If the tree is dirty, commit it first as "A1: save pending work". Paste the outputs in PROGRESS.md.
 
-- [ ] A2 Repository hygiene
+- [x] A2 Repository hygiene
   DO: `git ls-files | wc -l; git ls-files | grep -E "generated_maps|\.venv|__pycache__|\.log$|Zone|scratch"`
   DONE WHEN: the grep prints nothing; .gitignore covers those; maps/maze_00200.* and
   maps/house_00042.* are tracked. Fix .gitignore only by adding entries.

@@ -189,6 +189,18 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   ```
 - **Result:** Branch is `autonomy-work`, python3 is `/home/sriram/airmouse/.venv/bin/python3`, working tree was clean, pytest passes (10 passed).
 
+### Task A2: Repository hygiene
+- **DO:** `git ls-files | wc -l; git ls-files | grep -E "generated_maps|\.venv|__pycache__|\.log$|Zone|scratch"`
+- **Output:**
+  ```text
+  73
+  ```
+  (grep exited with code 1, 0 matching files)
+- **Check .gitignore:** `git check-ignore generated_maps .venv __pycache__ test.log foo:Zone.Identifier scratch/` all ignored.
+- **Check tracked maps:** `maps/maze_00200.*` and `maps/house_00042.*` (.json, .pgm, .sdf, .yaml) tracked.
+- **Result:** Hygiene verified; added explicit `*Zone*` and `scratch/` entries to `.gitignore`.
+
+
 
 
 
