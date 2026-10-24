@@ -230,6 +230,43 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   (exit code: 1, corresponding to simulation TIMEOUT exit code)
 - **Result:** All protocol columns present with non-na values; metrics JSON and logs generated; pytest passes (10 passed).
 
+### Task A5: Metrics fields
+- **DO:** Added missing protocol metrics fields to `MissionMetrics`, `MissionLogger`, and `run.py` in separate small commits:
+  - `pose_valid`: boolean (`mean_drift_m < 1.0`)
+  - `coverage_pct`: percentage of reachable free cells explored
+  - `survivors_total`: count of true survivors in building
+  - `collision_events`: debounced collision count
+  - `home_error_m`: distance from launch to landing position
+  - `flight_time_s`: duration of flight in seconds
+  - `path_length_m`: physical ground-truth distance traveled
+  - `frontier_clusters_remaining`: remaining distinct frontier clusters (via `FrontierDetector.count_remaining_clusters`)
+- **CHECK Output (JSON and summary line):**
+  - Summary line:
+    ```text
+    | house_00042 | YES | YES | 4.3% | 0/6 | 0 | 0 | 0.77 | 5.0 | 0.78 | TIMEOUT |
+    ```
+  - JSON snippet (`generated_maps/metrics_a5_test.json`):
+    ```json
+    {
+      "flight_time_s": 5.01,
+      "path_length_m": 0.78,
+      "coverage_pct": 4.29,
+      "survivors_found": 0,
+      "survivors_total": 6,
+      "false_positives": 0,
+      "home_error_m": 0.77,
+      "mean_drift_m": 0.05,
+      "max_drift_m": 0.36,
+      "collision_events": 0,
+      "took_off": true,
+      "pose_valid": true,
+      "frontier_clusters_remaining": 10,
+      "exit_reason": "TIMEOUT"
+    }
+    ```
+- **Result:** Every field is present in the metrics JSON and displayed in the summary line; pytest passes (10 passed).
+
+
 
 
 

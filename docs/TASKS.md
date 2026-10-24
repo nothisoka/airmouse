@@ -77,7 +77,7 @@ STANDARD COMMANDS
   CHECK: `scripts/run_headless.sh maps/house_00042.json a4_test`
   DONE WHEN: the summary line prints with all columns (use "n/a" only for values the code truly lacks).
 
-- [ ] A5 Metrics fields
+- [x] A5 Metrics fields
   DO: compare the metrics JSON against protocol column list. For each missing field, add it in its own
   small commit: took_off, pose_valid, coverage_pct (of reachable free cells), survivors_found,
   survivors_total, false_positives, collision_events, home_error_m, flight_time_s, path_length_m,
