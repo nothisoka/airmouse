@@ -95,7 +95,7 @@ STANDARD COMMANDS
   target a config value (default 0.90). Unit tests for all five outcomes.
   DONE WHEN: tests pass.
 
-- [ ] A8 scripts/run_batch.sh
+- [x] A8 scripts/run_batch.sh
   DO: create it (chmod +x). It generates layouts with fixed seeds into generated_maps/ using
   generate_maps.py, runs run_headless.sh on each sequentially (foreground), and prints a markdown table
   with the protocol columns and MEAN / WORST rows. A failing run must be recorded as a row, never abort

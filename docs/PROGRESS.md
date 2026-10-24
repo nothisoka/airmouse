@@ -289,6 +289,22 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   - Outcome 5 (CRASH): crash abort
 - **Result:** All 18 unit tests pass in pytest suite.
 
+### Task A8: scripts/run_batch.sh
+- **DO:** Created executable script `scripts/run_batch.sh` supporting procedural layout generation with fixed seeds, sequential execution via `scripts/run_headless.sh`, non-aborting row capture for failed/incomplete runs, `POSE_MODE=true|estimated` flag/env var selection, and formatted markdown table output with MEAN and WORST rows.
+- **CHECK:** `scripts/run_batch.sh 100 3 house`
+- **Output:**
+  ```text
+  | layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+  |---|---|---|---|---|---|---|---|---|---|---|
+  | house_00100 | YES | NO | 6.7% | 0/4 | 0 | 443 | 6.74 | 280.0 | 127.12 | TIMEOUT |
+  | house_00101 | YES | NO | 18.0% | 0/2 | 0 | 17 | 10.24 | 255.5 | 129.51 | INCOMPLETE |
+  | house_00102 | YES | NO | 13.9% | 0/6 | 0 | 13 | 12.98 | 196.5 | 98.77 | INCOMPLETE |
+  | **MEAN** | 3/3 | 0/3 | 12.9% | 0/12 | 0.0 | 157.7 | 9.99 | 244.0 | 118.47 | 0/3 COMPLETE |
+  | **WORST** | YES | NO | 6.7% | 0/6 | 0 | 443 | 12.98 | 280.0 | 98.77 | TIMEOUT |
+  ```
+- **Result:** 3-row layout evaluation with MEAN and WORST summary rows cleanly generated and printed; pytest passes (18 passed).
+
+
 
 
 
