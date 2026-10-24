@@ -19,6 +19,7 @@ class MissionMetrics:
     survivors_total: int = 0
     total_survivors: int = 0
     false_positives: int = 0
+    home_error_m: float = 0.0
     return_home_error_m: float = 0.0
     mean_drift_m: float = 0.0
     max_drift_m: float = 0.0
@@ -129,6 +130,7 @@ class MissionLogger:
             survivors_total=len(self.true_survivors),
             total_survivors=len(self.true_survivors),
             false_positives=false_positives,
+            home_error_m=rth_err,
             return_home_error_m=rth_err,
             mean_drift_m=mean_drift,
             max_drift_m=max_drift,
