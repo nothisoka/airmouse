@@ -43,6 +43,14 @@ class FrontierDetector:
     def total_frontiers_seen(self) -> int:
         return len(self.seen_frontiers_set)
 
+    def count_remaining_clusters(self, grid_map: OccupancyGrid) -> int:
+        """Return number of remaining frontier clusters in the occupancy grid."""
+        frontier_cells = self._extract_frontier_cells(grid_map)
+        if not frontier_cells:
+            return 0
+        clusters = self._cluster_frontiers(frontier_cells, grid_map)
+        return len(clusters)
+
     def report_failure(self, target_world: Tuple[float, float], grid_map: OccupancyGrid):
         gx, gy = grid_map.world_to_grid(target_world[0], target_world[1])
         self.blacklist_counts[(gx, gy)] = self.blacklist_counts.get((gx, gy), 0) + 1

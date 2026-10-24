@@ -22,6 +22,7 @@ class MissionMetrics:
     max_drift_m: float = 0.0
     collisions: int = 0
     took_off: bool = True
+    pose_valid: bool = True
     pose_estimate_valid: bool = True
     frontiers_seen: int = 0
     exit_reason: str = "COMPLETE"
@@ -105,9 +106,9 @@ class MissionLogger:
         mean_drift = float(np.mean(self.drifts)) if self.drifts else 0.0
         max_drift = float(np.max(self.drifts)) if self.drifts else 0.0
 
-        # Assess takeoff and pose validity
+        # Assess takeoff and pose validity (protocol: mean drift < 1.0 m)
         took_off = (dist > 0.5) or (len(self.traj_true) > 0 and final_true_pos[2] >= 0.3)
-        pose_valid = (max_drift < 5.0) and not any(
+        pose_valid = (mean_drift < 1.0) and not any(
             math.isnan(p[0]) or math.isnan(p[1]) for p in self.traj_est
         )
 
@@ -128,6 +129,7 @@ class MissionLogger:
             max_drift_m=max_drift,
             collisions=self.collisions,
             took_off=took_off,
+            pose_valid=pose_valid,
             pose_estimate_valid=pose_valid,
             frontiers_seen=frontiers_seen,
             exit_reason=exit_reason,
