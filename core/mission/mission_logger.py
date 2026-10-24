@@ -22,6 +22,7 @@ class MissionMetrics:
     return_home_error_m: float = 0.0
     mean_drift_m: float = 0.0
     max_drift_m: float = 0.0
+    collision_events: int = 0
     collisions: int = 0
     took_off: bool = True
     pose_valid: bool = True
@@ -131,6 +132,7 @@ class MissionLogger:
             return_home_error_m=rth_err,
             mean_drift_m=mean_drift,
             max_drift_m=max_drift,
+            collision_events=self.collisions,
             collisions=self.collisions,
             took_off=took_off,
             pose_valid=pose_valid,
