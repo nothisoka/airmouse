@@ -16,6 +16,7 @@ class MissionMetrics:
     coverage_pct: float = 0.0
     coverage_percentage: float = 0.0
     survivors_found: int = 0
+    survivors_total: int = 0
     total_survivors: int = 0
     false_positives: int = 0
     return_home_error_m: float = 0.0
@@ -124,6 +125,7 @@ class MissionLogger:
             coverage_pct=cov_pct,
             coverage_percentage=cov_pct,
             survivors_found=found,
+            survivors_total=len(self.true_survivors),
             total_survivors=len(self.true_survivors),
             false_positives=false_positives,
             return_home_error_m=rth_err,
