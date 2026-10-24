@@ -104,7 +104,7 @@ STANDARD COMMANDS
   CHECK: `scripts/run_batch.sh 100 3 house`
   DONE WHEN: a 3-row table with MEAN/WORST prints.
 
-- [ ] A9 Baselines (no code changes)
+- [x] A9 Baselines (no code changes)
   DO: run `scripts/run_batch.sh 100 5 house` and `scripts/run_batch.sh 200 5 maze` twice: once with
   POSE_MODE=true and once with POSE_MODE=estimated. If one layout takes longer than 5 minutes, say so
   and reduce to 3+3. Save the four tables to docs/baselines/A9_true_house.md, A9_true_maze.md,

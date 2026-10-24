@@ -304,6 +304,57 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   ```
 - **Result:** 3-row layout evaluation with MEAN and WORST summary rows cleanly generated and printed; pytest passes (18 passed).
 
+### Task A9: Baselines (no code changes)
+- **DO:** Executed `scripts/run_batch.sh 100 5 house` and `scripts/run_batch.sh 200 5 maze` under both `POSE_MODE=true` and `POSE_MODE=estimated`.
+- **Output Files:** Saved baseline tables to `docs/baselines/A9_true_house.md`, `docs/baselines/A9_true_maze.md`, `docs/baselines/A9_est_house.md`, and `docs/baselines/A9_est_maze.md`.
+- **CHECK Tables:**
+
+#### Baseline 1: True Pose - House (`docs/baselines/A9_true_house.md`)
+| layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+|---|---|---|---|---|---|---|---|---|---|---|
+| house_00100 | YES | NO | 52.2% | 0/4 | 0 | 30 | 0.73 | 270.6 | 133.53 | INCOMPLETE |
+| house_00101 | YES | NO | 59.6% | 0/2 | 0 | 52 | 0.73 | 218.0 | 106.45 | INCOMPLETE |
+| house_00102 | YES | NO | 34.3% | 0/6 | 0 | 28 | 0.76 | 242.6 | 118.26 | INCOMPLETE |
+| house_00103 | YES | NO | 48.5% | 0/2 | 0 | 30 | 19.28 | 280.0 | 140.12 | TIMEOUT |
+| house_00104 | YES | NO | 10.4% | 0/5 | 0 | 0 | 0.75 | 170.7 | 79.48 | INCOMPLETE |
+| **MEAN** | 5/5 | 0/5 | 41.0% | 0/19 | 0.0 | 28.0 | 4.45 | 236.4 | 115.57 | 0/5 COMPLETE |
+| **WORST** | YES | NO | 10.4% | 0/6 | 0 | 52 | 19.28 | 280.0 | 79.48 | TIMEOUT |
+
+#### Baseline 2: True Pose - Maze (`docs/baselines/A9_true_maze.md`)
+| layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+|---|---|---|---|---|---|---|---|---|---|---|
+| maze_00200 | YES | NO | 23.1% | 0/6 | 0 | 134 | 0.73 | 212.0 | 91.41 | INCOMPLETE |
+| maze_00201 | YES | NO | 20.2% | 0/1 | 0 | 95 | 0.77 | 241.5 | 103.59 | INCOMPLETE |
+| maze_00202 | YES | NO | 26.5% | 0/6 | 0 | 120 | 0.77 | 204.9 | 87.65 | INCOMPLETE |
+| maze_00203 | YES | NO | 11.1% | 0/5 | 0 | 69 | 0.73 | 172.7 | 61.86 | INCOMPLETE |
+| maze_00204 | YES | NO | 33.2% | 0/6 | 0 | 330 | 6.27 | 280.0 | 122.66 | TIMEOUT |
+| **MEAN** | 5/5 | 0/5 | 22.8% | 0/24 | 0.0 | 149.6 | 1.86 | 222.2 | 93.44 | 0/5 COMPLETE |
+| **WORST** | YES | NO | 11.1% | 0/6 | 0 | 330 | 6.27 | 280.0 | 61.86 | TIMEOUT |
+
+#### Baseline 3: Estimated Pose - House (`docs/baselines/A9_est_house.md`)
+| layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+|---|---|---|---|---|---|---|---|---|---|---|
+| house_00100 | YES | NO | 11.8% | 0/4 | 0 | 509 | 6.56 | 280.0 | 120.83 | TIMEOUT |
+| house_00101 | YES | NO | 21.1% | 0/2 | 0 | 14 | 11.55 | 280.0 | 144.40 | TIMEOUT |
+| house_00102 | YES | NO | 18.2% | 0/6 | 0 | 25 | 10.27 | 280.0 | 142.82 | TIMEOUT |
+| house_00103 | YES | NO | 11.2% | 0/2 | 0 | 22 | 20.34 | 280.0 | 142.48 | TIMEOUT |
+| house_00104 | YES | NO | 11.5% | 0/5 | 0 | 17 | 1.10 | 226.8 | 114.45 | INCOMPLETE |
+| **MEAN** | 5/5 | 0/5 | 14.8% | 0/19 | 0.0 | 117.4 | 9.96 | 269.4 | 132.99 | 0/5 COMPLETE |
+| **WORST** | YES | NO | 11.2% | 0/6 | 0 | 509 | 20.34 | 280.0 | 114.45 | TIMEOUT |
+
+#### Baseline 4: Estimated Pose - Maze (`docs/baselines/A9_est_maze.md`)
+| layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+|---|---|---|---|---|---|---|---|---|---|---|
+| maze_00200 | YES | NO | 10.5% | 0/6 | 0 | 169 | 7.73 | 280.0 | 133.82 | TIMEOUT |
+| maze_00201 | YES | NO | 3.5% | 0/1 | 0 | 922 | 2.52 | 246.6 | 93.99 | INCOMPLETE |
+| maze_00202 | YES | NO | 15.3% | 0/6 | 0 | 158 | 2.37 | 280.0 | 135.77 | TIMEOUT |
+| maze_00203 | YES | NO | 10.7% | 0/5 | 0 | 188 | 6.76 | 280.0 | 127.77 | TIMEOUT |
+| maze_00204 | YES | NO | 11.5% | 0/6 | 0 | 386 | 8.87 | 280.0 | 128.58 | TIMEOUT |
+| **MEAN** | 5/5 | 0/5 | 10.3% | 0/24 | 0.0 | 364.6 | 5.65 | 273.3 | 123.98 | 0/5 COMPLETE |
+| **WORST** | YES | NO | 3.5% | 0/6 | 0 | 922 | 8.87 | 280.0 | 93.99 | TIMEOUT |
+
+- **Result:** Baseline benchmark tables recorded and committed without code changes; all 18 unit tests pass.
+
 
 
 
