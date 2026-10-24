@@ -220,6 +220,17 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   - visual odometry (`core/estimation/visual_odometry.py` - `VisualOdometry`)
 - **Result:** `docs/CODEMAP.md` created with no code changes; pytest passes (10 passed).
 
+### Task A4: scripts/run_headless.sh
+- **DO:** Created executable script `scripts/run_headless.sh` supporting headless execution under `timeout 300`, metrics JSON output to `generated_maps/metrics_<label>.json`, log capture to `generated_maps/run_<label>.log`, printing ONE summary line formatted with protocol columns, and returning the simulation's exit code. Supports `POSE_MODE=true|estimated` flag.
+- **CHECK:** `scripts/run_headless.sh maps/house_00042.json a4_test`
+- **Output:**
+  ```text
+  | house_00042 | YES | NO | 12.3% | 0/6 | 0 | 145 | 5.13 | 280.0 | 142.12 | TIMEOUT |
+  ```
+  (exit code: 1, corresponding to simulation TIMEOUT exit code)
+- **Result:** All protocol columns present with non-na values; metrics JSON and logs generated; pytest passes (10 passed).
+
+
 
 
 

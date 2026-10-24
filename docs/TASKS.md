@@ -70,7 +70,7 @@ STANDARD COMMANDS
   config keys for flight time / speed / return-home, scan-to-map correction, visual odometry.
   DONE WHEN: docs/CODEMAP.md has an entry for every item above (write "NOT FOUND" if missing).
 
-- [ ] A4 scripts/run_headless.sh
+- [x] A4 scripts/run_headless.sh
   DO: create scripts/run_headless.sh (chmod +x) if missing. It runs run.py headless on a map under
   `timeout 300`, writes generated_maps/metrics_<label>.json and run_<label>.log, prints ONE summary line
   with the protocol columns, and returns the simulation's exit code.
