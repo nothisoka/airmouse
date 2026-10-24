@@ -69,7 +69,7 @@ class MissionLogger:
         self.traj_est.append((float(est_pos[0]), float(est_pos[1])))
         self.traj_true.append((float(true_pos[0]), float(true_pos[1])))
         if is_collision:
-            if not self.in_collision or (sim_time - self.last_collision_time >= 0.5):
+            if not self.in_collision:
                 self.collisions += 1
                 self.last_collision_time = sim_time
             self.in_collision = True

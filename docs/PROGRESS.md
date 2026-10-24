@@ -266,6 +266,16 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
     ```
 - **Result:** Every field is present in the metrics JSON and displayed in the summary line; pytest passes (10 passed).
 
+### Task A6: Collision events
+- **DO:** Changed collision detection in `MissionLogger.record_step` to count an event only upon contact start (transition from `in_contact=False` to `in_contact=True`). Removed the periodic 0.5s timeout re-triggering while continuous contact is maintained.
+- **Unit Test:** Added `tests/test_collision_events.py` verifying that:
+  - 100 consecutive in-contact steps = 1 event
+  - Leaving contact (10 free steps) = still 1 event
+  - Re-entering contact (50 steps) = exactly 2 events
+- **Run Check:** On a 30s run (`maps/house_00042.json`), `collision_events: 0` (plausible during nominal open flight).
+- **Result:** Unit tests pass (11 passed), verified state transition debouncing.
+
+
 
 
 

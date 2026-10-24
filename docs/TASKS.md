@@ -84,7 +84,7 @@ STANDARD COMMANDS
   exit_reason, frontier_clusters_remaining (replaces "frontiers discovered").
   DONE WHEN: one run's JSON contains every field and the summary line shows them.
 
-- [ ] A6 Collision events
+- [x] A6 Collision events
   DO: count a collision when contact STARTS (transition free -> in-contact), not every step in contact.
   Add a unit test: 100 consecutive in-contact steps = 1 event; leave and re-enter = 2 events.
   DONE WHEN: test passes; one run's collision_events looks plausible (write the number).
