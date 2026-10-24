@@ -1,6 +1,7 @@
 # Mission Limits, Failsafes and Survivor Target
 mission:
   max_survivors: 6
+  coverage_target: 0.90        # Exploration target (0.90 = 90% of reachable free space)
   max_flight_time_s: 240.0      # Planned flight budget
   hard_time_limit_s: 280.0      # Hard simulation time ceiling
   max_sim_steps: 28000          # Hard simulation step ceiling (100 Hz * 280s)

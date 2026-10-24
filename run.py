@@ -133,6 +133,11 @@ def run_pygame_sim(
     if max_sim_steps is None:
         max_sim_steps = int(mission_cfg.get("max_sim_steps", int(hard_time_limit_s * 100)))
 
+    coverage_target = float(mission_cfg.get("coverage_target", 0.90))
+    if coverage_target > 1.0:
+        coverage_target = coverage_target / 100.0
+    coverage_target_pct = coverage_target * 100.0
+
     print(f"\n========================================================")
     print(f"  NIDAR AIRMOUSE: Autonomous Search & Sensor Fusion")
     print(f"  Map: {resolved_map} | Headless: {headless} | Seed: {seed}")
@@ -342,6 +347,12 @@ def run_pygame_sim(
             exit_reason = "FAILSAFE"
             break
 
+        # Crash checks: dropping to floor during flight indicates a crash
+        if sim_time > 3.0 and true_phys.position[2] <= 0.05 and mission.state in (MissionState.EXPLORE, MissionState.RETURN_HOME, MissionState.TAKEOFF):
+            print(f"[CRASH] Drone crashed to ground at t={sim_time:.1f}s (z={true_phys.position[2]:.2f}m).")
+            exit_reason = "CRASH"
+            break
+
         # Step 4f: Render UI
         if not headless and step_count % 2 == 0:
             cov_pct = compute_true_room_coverage(true_grid, grid_map, metadata.cell_size_m)
@@ -366,12 +377,8 @@ def run_pygame_sim(
             )
 
     # 5. Final Report & Performance Evaluation
-    if mission.state == MissionState.COMPLETE:
-        exit_reason = "COMPLETE"
-    elif exit_reason == "COMPLETE":
-        exit_reason = "TIMEOUT"
-
     final_true = drone.get_state()
+    is_landed = (mission.state in (MissionState.COMPLETE, MissionState.LAND)) or (final_true.position[2] <= 0.25 and final_true.position[2] >= 0.0)
     confirmed = [s.estimated_pos for s in mission.tracker.confirmed_survivors]
     cov_pct = compute_true_room_coverage(true_grid, grid_map, metadata.cell_size_m)
     explored_cells = int((cov_pct / 100.0) * total_free_cells)
@@ -386,6 +393,8 @@ def run_pygame_sim(
         frontier_clusters_remaining=clusters_left,
         frontiers_seen=frontiers_seen,
         exit_reason=exit_reason,
+        landed=is_landed,
+        coverage_target_pct=coverage_target_pct,
     )
 
     if output_json:

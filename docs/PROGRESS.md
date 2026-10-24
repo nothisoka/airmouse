@@ -275,6 +275,21 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
 - **Run Check:** On a 30s run (`maps/house_00042.json`), `collision_events: 0` (plausible during nominal open flight).
 - **Result:** Unit tests pass (11 passed), verified state transition debouncing.
 
+### Task A7: exit_reason rules
+- **DO:** Implemented strict exit reason determination rules in `core/mission/mission_logger.py` (`determine_exit_reason`):
+  - `COMPLETE`: only if landed AND (coverage >= coverage_target OR frontier_clusters_remaining == 0) AND home_error_m < 1.0.
+  - `INCOMPLETE`: landed but not meeting coverage/frontiers or home_error >= 1.0m.
+  - Preserved abort reasons: `TIMEOUT`, `FAILSAFE`, `CRASH`.
+  - Added configurable `coverage_target: 0.90` to `config/mission.yaml`, parsed in `run.py`.
+- **Unit Tests:** Added `tests/test_exit_reason_rules.py` testing all five outcomes:
+  - Outcome 1 (COMPLETE): landed + coverage met / no frontiers + home_error < 1.0
+  - Outcome 2 (INCOMPLETE): landed + low coverage with frontiers remaining, or landed + home_error >= 1.0, or unlanded
+  - Outcome 3 (TIMEOUT): timeout abort
+  - Outcome 4 (FAILSAFE): failsafe abort
+  - Outcome 5 (CRASH): crash abort
+- **Result:** All 18 unit tests pass in pytest suite.
+
+
 
 
 

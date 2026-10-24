@@ -9,6 +9,32 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 
 
+def determine_exit_reason(
+    base_exit_reason: str,
+    landed: bool,
+    coverage_pct: float,
+    frontier_clusters_remaining: int,
+    home_error_m: float,
+    coverage_target_pct: float = 90.0,
+) -> str:
+    """Determine final exit reason according to Task A7 rules:
+    - COMPLETE only if (coverage target met OR no reachable frontiers) AND home_error_m < 1.0.
+    - Landed but not meeting that = INCOMPLETE.
+    - Others: TIMEOUT, FAILSAFE, CRASH.
+    """
+    if base_exit_reason in ("TIMEOUT", "FAILSAFE", "CRASH"):
+        return base_exit_reason
+
+    coverage_met = coverage_pct >= coverage_target_pct
+    no_frontiers = frontier_clusters_remaining == 0
+    home_ok = home_error_m < 1.0
+
+    if landed and (coverage_met or no_frontiers) and home_ok:
+        return "COMPLETE"
+    else:
+        return "INCOMPLETE"
+
+
 @dataclass
 class MissionMetrics:
     flight_time_s: float = 0.0
@@ -56,6 +82,7 @@ class MissionLogger:
         self.collisions: int = 0
         self.in_collision: bool = False
         self.last_collision_time: float = -10.0
+        self.max_alt_true: float = 0.0
 
     def record_step(
         self,
@@ -68,6 +95,8 @@ class MissionLogger:
         self.drifts.append(drift)
         self.traj_est.append((float(est_pos[0]), float(est_pos[1])))
         self.traj_true.append((float(true_pos[0]), float(true_pos[1])))
+        if len(true_pos) >= 3:
+            self.max_alt_true = max(self.max_alt_true, float(true_pos[2]))
         if is_collision:
             if not self.in_collision:
                 self.collisions += 1
@@ -86,6 +115,8 @@ class MissionLogger:
         frontier_clusters_remaining: int = 0,
         frontiers_seen: int = 0,
         exit_reason: str = "COMPLETE",
+        landed: Optional[bool] = None,
+        coverage_target_pct: float = 90.0,
     ) -> MissionMetrics:
         # Distance traveled
         dist = 0.0
@@ -115,15 +146,24 @@ class MissionLogger:
         max_drift = float(np.max(self.drifts)) if self.drifts else 0.0
 
         # Assess takeoff and pose validity (protocol: mean drift < 1.0 m)
-        took_off = (dist > 0.5) or (len(self.traj_true) > 0 and final_true_pos[2] >= 0.3)
+        took_off = (dist > 0.5) or (self.max_alt_true >= 0.3) or (len(final_true_pos) >= 3 and final_true_pos[2] >= 0.3)
         pose_valid = (mean_drift < 1.0) and not any(
             math.isnan(p[0]) or math.isnan(p[1]) for p in self.traj_est
         )
 
-        # Success criteria: located ALL survivors AND landed within 1.0m of launch
-        success = (found == len(self.true_survivors)) and (rth_err < 1.0) and (exit_reason == "COMPLETE")
+        # Determine exit reason per protocol A7 rules
+        is_landed = landed if landed is not None else (final_true_pos[2] <= 0.25 and took_off)
+        final_exit_reason = determine_exit_reason(
+            base_exit_reason=exit_reason,
+            landed=is_landed,
+            coverage_pct=cov_pct,
+            frontier_clusters_remaining=frontier_clusters_remaining,
+            home_error_m=rth_err,
+            coverage_target_pct=coverage_target_pct,
+        )
 
-        exit_code = 0 if exit_reason == "COMPLETE" else 1
+        exit_code = 0 if final_exit_reason == "COMPLETE" else 1
+        success = (final_exit_reason == "COMPLETE")
 
         return MissionMetrics(
             flight_time_s=flight_time_s,
@@ -147,7 +187,7 @@ class MissionLogger:
             pose_estimate_valid=pose_valid,
             frontier_clusters_remaining=frontier_clusters_remaining,
             frontiers_seen=frontiers_seen,
-            exit_reason=exit_reason,
+            exit_reason=final_exit_reason,
             exit_code=exit_code,
             success=success,
         )

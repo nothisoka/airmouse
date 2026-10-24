@@ -89,7 +89,7 @@ STANDARD COMMANDS
   Add a unit test: 100 consecutive in-contact steps = 1 event; leave and re-enter = 2 events.
   DONE WHEN: test passes; one run's collision_events looks plausible (write the number).
 
-- [ ] A7 exit_reason rules
+- [x] A7 exit_reason rules
   DO: COMPLETE only if (coverage target met OR no reachable frontiers) AND home_error_m < 1.0.
   Landed but not meeting that = INCOMPLETE. Others: TIMEOUT, FAILSAFE, CRASH. Make the coverage
   target a config value (default 0.90). Unit tests for all five outcomes.
