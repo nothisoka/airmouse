@@ -626,6 +626,23 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
 - **CHECK:** Task C2 empirical check yielded a detection rate of **100.0% (10/10)** with confidence scores between 0.745 and 0.873 across distances from 1.80m to 4.55m and varied viewing angles.
 - **DONE WHEN:** The condition for renderer changes ("only if detection rate < 80%") is not triggered because detection rate is 100.0% ($\ge 80\%$), confirming person sprite and camera synthesis visibility are already optimal; all 29 unit tests pass.
 
+### Task C4: Localisation unit test
+- **DO:** Created unit test suite `tests/test_localisation.py` validating 3D ground projection pipeline from bounding box, camera intrinsics ($f_x, f_y, c_x, c_y$, camera pitch down), estimated drone pose $(x, y, z, \text{yaw}, \text{pitch}, \text{roll})$, and altitude to map ground coordinates $(w_x, w_y, 0)$.
+- **CHECK:** Evaluated 10 synthetic test cases spanning cardinal headings (East, North, West, South), diagonal headings ($45^\circ$), off-center lateral viewing angles, dynamic pitch/roll attitude offsets, and varying flight altitudes (0.7m to 2.2m).
+  ```text
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[Straight East, 3.0m distance] PASSED
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[Straight North, 3.5m distance] PASSED
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[Straight West, 2.5m distance] PASSED
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[Straight South, 3.0m distance] PASSED
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[Diagonal North-East 45 deg, 3.54m distance] PASSED
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[Off-center left viewing angle] PASSED
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[Off-center right viewing angle] PASSED
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[Flight dynamics: non-zero pitch and roll] PASSED
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[Low altitude flight: 0.7m] PASSED
+  tests/test_localisation.py::TestSurvivorLocalisation::test_localisation_accuracy_under_threshold[High altitude flight: 2.2m] PASSED
+  ```
+- **DONE WHEN:** Ground localization error is $< 0.5$ m on all 10 test cases (measured error $\le 0.0001$ m across all test configurations); all 39 unit tests pass in pytest suite.
+
 
 
 

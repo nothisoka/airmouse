@@ -189,7 +189,7 @@ CHECKPOINT B — stop and report the table with worsened cases.
   DO: change ONLY the backend renderer: person size, contrast, textured body, shadow. Re-run C2.
   DONE WHEN: detection rate >= 80% on the test frames, or documented why not.
 
-- [ ] C4 Localisation unit test
+- [x] C4 Localisation unit test
   DO: bounding box + camera intrinsics + estimated pose + altitude -> map coordinates. Unit test with
   synthetic boxes at known positions.
   DONE WHEN: error < 0.5 m on all test cases.
