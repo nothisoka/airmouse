@@ -26,8 +26,9 @@ mkdir -p generated_maps
 METRICS_JSON="generated_maps/metrics_${LABEL}.json"
 LOG_FILE="generated_maps/run_${LABEL}.log"
 
-# Support POSE_MODE=true|estimated
-EXTRA_ARGS=()
+# Support POSE_MODE=true|estimated and PROFILE=baseline|flow|full
+PROFILE="${PROFILE:-baseline}"
+EXTRA_ARGS=(--profile "$PROFILE")
 if [ "${POSE_MODE:-}" = "true" ]; then
     EXTRA_ARGS+=(--debug-true-pose)
 fi
@@ -51,13 +52,14 @@ cp -f "$LOG_FILE" "run_${LABEL}.log" 2>/dev/null || true
 cp -f "$LOG_FILE" "generated_maps/${LABEL}.log" 2>/dev/null || true
 
 # Extract protocol metrics and print ONE summary line
-"$PYTHON" - "$METRICS_JSON" "$MAP_PATH" "$SIM_EXIT" << 'EOF'
+"$PYTHON" - "$METRICS_JSON" "$MAP_PATH" "$SIM_EXIT" "$PROFILE" << 'EOF'
 import sys, json
 from pathlib import Path
 
 metrics_file = sys.argv[1]
 map_path = sys.argv[2]
 sim_exit = int(sys.argv[3])
+default_profile = sys.argv[4] if len(sys.argv) > 4 else "baseline"
 
 data = {}
 if Path(metrics_file).exists():
@@ -69,6 +71,9 @@ if Path(metrics_file).exists():
 
 # layout
 layout = Path(map_path).stem
+
+# profile
+profile = data.get("profile", default_profile)
 
 # took_off
 if "took_off" in data:
@@ -135,7 +140,7 @@ er = data.get("exit_reason")
 if er is None:
     er = "TIMEOUT" if sim_exit == 124 else ("ERROR" if sim_exit != 0 else "COMPLETE")
 
-print(f"| {layout} | {took_off} | {pose_valid} | {cov_str} | {survivors} | {fp_str} | {ce_str} | {he_str} | {ft_str} | {pl_str} | {er} |")
+print(f"| {layout} | {profile} | {took_off} | {pose_valid} | {cov_str} | {survivors} | {fp_str} | {ce_str} | {he_str} | {ft_str} | {pl_str} | {er} |")
 EOF
 
 exit "$SIM_EXIT"

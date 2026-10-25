@@ -12,13 +12,17 @@ else
     PYTHON="python3"
 fi
 
-# Check for --pose-mode flag in arguments
+# Check for --pose-mode and --profile flags in arguments
 POSE_MODE="${POSE_MODE:-estimated}"
+PROFILE="${PROFILE:-baseline}"
 ARGS=()
 for arg in "$@"; do
     case "$arg" in
         --pose-mode=*)
             POSE_MODE="${arg#*=}"
+            ;;
+        --profile=*)
+            PROFILE="${arg#*=}"
             ;;
         *)
             ARGS+=("$arg")
@@ -36,10 +40,11 @@ mkdir -p generated_maps
 "$PYTHON" generate_maps.py --mode "$MODE" --seed "$START_SEED" --count "$COUNT" --out generated_maps > /dev/null 2>&1
 
 export POSE_MODE
+export PROFILE
 export ENABLE_YOLO="${ENABLE_YOLO:-true}"
 
 # Run headless sequentially on each layout and print markdown table with MEAN / WORST rows
-"$PYTHON" - "$START_SEED" "$COUNT" "$MODE" "$POSE_MODE" << 'EOF'
+"$PYTHON" - "$START_SEED" "$COUNT" "$MODE" "$POSE_MODE" "$PROFILE" << 'EOF'
 import sys, subprocess, json
 from pathlib import Path
 
@@ -47,6 +52,7 @@ start_seed = int(sys.argv[1])
 count = int(sys.argv[2])
 mode = sys.argv[3]
 pose_mode = sys.argv[4]
+profile_arg = sys.argv[5] if len(sys.argv) > 5 else "baseline"
 
 results = []
 
@@ -85,6 +91,7 @@ for i in range(count):
 
     results.append({
         "layout": map_name,
+        "profile": data.get("profile", profile_arg),
         "took_off": took_off,
         "pose_valid": pose_valid,
         "coverage_pct": cov,
@@ -99,8 +106,8 @@ for i in range(count):
     })
 
 # Format markdown table
-header = "| layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |"
-sep    = "|---|---|---|---|---|---|---|---|---|---|---|"
+header = "| layout | profile | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |"
+sep    = "|---|---|---|---|---|---|---|---|---|---|---|---|"
 lines = [header, sep]
 
 for r in results:
@@ -108,7 +115,7 @@ for r in results:
     pv_str = "YES" if r["pose_valid"] else "NO"
     cov_str = f"{r['coverage_pct']:.1f}%"
     surv_str = f"{r['survivors_found']}/{r['survivors_total']}"
-    row = f"| {r['layout']} | {to_str} | {pv_str} | {cov_str} | {surv_str} | {r['false_positives']} | {r['collision_events']} | {r['home_error_m']:.2f} | {r['flight_time_s']:.1f} | {r['path_length_m']:.2f} | {r['exit_reason']} |"
+    row = f"| {r['layout']} | {r['profile']} | {to_str} | {pv_str} | {cov_str} | {surv_str} | {r['false_positives']} | {r['collision_events']} | {r['home_error_m']:.2f} | {r['flight_time_s']:.1f} | {r['path_length_m']:.2f} | {r['exit_reason']} |"
     lines.append(row)
 
 # Compute MEAN
@@ -128,7 +135,7 @@ if n > 0:
     complete_count = sum(1 for r in results if r['exit_reason'] == 'COMPLETE')
     mean_er = f"{complete_count}/{n} COMPLETE"
 
-    mean_row = f"| **MEAN** | {mean_to} | {mean_pv} | {mean_cov} | {surv_mean} | {mean_fp} | {mean_ce} | {mean_he} | {mean_ft} | {mean_pl} | {mean_er} |"
+    mean_row = f"| **MEAN** | {profile_arg} | {mean_to} | {mean_pv} | {mean_cov} | {surv_mean} | {mean_fp} | {mean_ce} | {mean_he} | {mean_ft} | {mean_pl} | {mean_er} |"
     lines.append(mean_row)
 
     # Compute WORST
@@ -144,7 +151,7 @@ if n > 0:
     reasons = [r['exit_reason'] for r in results]
     worst_er = "CRASH" if "CRASH" in reasons else ("FAILSAFE" if "FAILSAFE" in reasons else ("TIMEOUT" if "TIMEOUT" in reasons else ("INCOMPLETE" if "INCOMPLETE" in reasons else "COMPLETE")))
 
-    worst_row = f"| **WORST** | {worst_to} | {worst_pv} | {worst_cov} | {worst_surv} | {worst_fp} | {worst_ce} | {worst_he} | {worst_ft} | {worst_pl} | {worst_er} |"
+    worst_row = f"| **WORST** | {profile_arg} | {worst_to} | {worst_pv} | {worst_cov} | {worst_surv} | {worst_fp} | {worst_ce} | {worst_he} | {worst_ft} | {worst_pl} | {worst_er} |"
     lines.append(worst_row)
 
 print("\n".join(lines))

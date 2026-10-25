@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import random
 import sys
 import time
@@ -46,6 +47,14 @@ from airmouse.backends.pygame_sim.pygame_viewer import PygameViewer
 
 def load_mission_config() -> dict:
     cfg_path = Path(__file__).resolve().parent / "config" / "mission.yaml"
+    if cfg_path.exists():
+        with open(cfg_path, "r") as f:
+            return yaml.safe_load(f) or {}
+    return {}
+
+
+def load_sensors_config() -> dict:
+    cfg_path = Path(__file__).resolve().parent / "config" / "sensors.yaml"
     if cfg_path.exists():
         with open(cfg_path, "r") as f:
             return yaml.safe_load(f) or {}
@@ -125,10 +134,13 @@ def run_pygame_sim(
     mode: Optional[str] = None,
     output_json: Optional[str] = None,
     debug_true_pose: bool = False,
+    profile: Optional[str] = None,
 ):
     resolved_map = resolve_or_generate_map(map_path, seed=seed, mode=mode)
 
     cfg = load_mission_config()
+    sensors_cfg = load_sensors_config()
+    active_profile = profile or os.environ.get("PROFILE") or sensors_cfg.get("profile", "baseline")
     mission_cfg = cfg.get("mission", {})
     if max_flight_time_s is None:
         max_flight_time_s = float(mission_cfg.get("max_flight_time_s", 600.0))
@@ -183,6 +195,8 @@ def run_pygame_sim(
         grid=true_grid,
         cell_size_m=metadata.cell_size_m,
         camera_rate_hz=2.0,
+        profile=active_profile,
+        sensors_config=sensors_cfg,
     )
     flight = SimulatedFlightInterface(drone=drone)
     viewer = PygameViewer(
@@ -208,6 +222,7 @@ def run_pygame_sim(
         max_flight_time_s=max_flight_time_s,
         cruise_speed_mps=nominal_cruise_speed,
         return_home_margin=return_home_margin,
+        sensor_hub=sensor_hub,
     )
 
     # Count reachable free cells for coverage metrics
@@ -449,6 +464,7 @@ def run_pygame_sim(
         exit_reason=exit_reason,
         landed=is_landed,
         coverage_target_pct=coverage_target_pct,
+        profile=active_profile,
     )
 
     if output_json:
@@ -456,6 +472,7 @@ def run_pygame_sim(
         print(f"Metrics saved to: {output_json}")
 
     print("\n=================== MISSION REPORT ===================")
+    print(f"Profile:                     {metrics.profile}")
     print(f"Final State:                 {mission.state.name}")
     print(f"Exit Reason:                 {metrics.exit_reason} (Exit Code: {metrics.exit_code})")
     print(f"Mission Success:             {'YES' if metrics.success else 'NO'}")
@@ -502,6 +519,7 @@ def main():
     parser.add_argument("--no-yolo", action="store_true", help="Disable YOLO object detection")
     parser.add_argument("--output-json", default=None, help="Path to save metrics JSON")
     parser.add_argument("--debug-true-pose", action="store_true", help="Debug-only: feed true pose to mapper and planner")
+    parser.add_argument("--profile", choices=["baseline", "flow", "full"], default=None, help="Sensor profile (baseline | flow | full)")
     args = parser.parse_args()
 
     if args.backend == "pygame":
@@ -516,6 +534,7 @@ def main():
             mode=args.mode,
             output_json=args.output_json,
             debug_true_pose=args.debug_true_pose,
+            profile=args.profile,
         )
         sys.exit(metrics.exit_code)
     elif args.backend == "gazebo":

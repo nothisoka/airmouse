@@ -1,5 +1,32 @@
 # Sensor Simulation & Configuration
+# Active sensor profile: baseline | flow | full
+#   baseline = MPU6050 IMU + 5 ultrasonic rangers (4 horizontal, 1 down) + front camera
+#   flow     = baseline + downward camera (feature / optical-flow odometry)
+#   full     = flow + 360-degree 2D lidar
+profile: baseline
+
+profiles:
+  baseline:
+    mpu6050: true
+    ultrasonic: true
+    camera_front: true
+    camera_down: false
+    lidar2d: false
+  flow:
+    mpu6050: true
+    ultrasonic: true
+    camera_front: true
+    camera_down: true
+    lidar2d: false
+  full:
+    mpu6050: true
+    ultrasonic: true
+    camera_front: true
+    camera_down: true
+    lidar2d: true
+
 mpu6050:
+  enabled: true
   rate_hz: 100
   gyro:
     noise_density: 0.005       # rad/s / sqrt(Hz)
@@ -12,6 +39,7 @@ mpu6050:
   gravity: 9.80665
 
 ultrasonic:
+  enabled: true
   rate_hz: 20
   min_range_m: 0.02
   max_range_m: 4.0
@@ -38,6 +66,7 @@ ultrasonic:
       pitch_offset_rad: -1.5707963  # pointing straight down for altitude
 
 camera:
+  enabled: true
   rate_hz: 20
   width: 320
   height: 240
@@ -46,3 +75,32 @@ camera:
   pitch_down_deg: 15.0         # slightly pitched down for ground / survivor viewing
   focal_length_px: 228.5       # fx = (width/2) / tan(fov_h / 2)
 
+camera_front:
+  enabled: true
+  rate_hz: 20
+  width: 320
+  height: 240
+  fov_horizontal_deg: 70.0
+  fov_vertical_deg: 55.0
+  pitch_down_deg: 15.0         # slightly pitched down for ground / survivor viewing
+  focal_length_px: 228.5       # fx = (width/2) / tan(fov_h / 2)
+
+camera_down:
+  enabled: false
+  rate_hz: 20
+  width: 320
+  height: 240
+  fov_horizontal_deg: 70.0
+  fov_vertical_deg: 55.0
+  pitch_down_deg: 90.0         # pointing straight down for optical flow / feature tracking
+  focal_length_px: 228.5
+
+lidar2d:
+  enabled: false
+  rate_hz: 8.0
+  num_rays: 360
+  min_range_m: 0.15
+  max_range_m: 12.0
+  noise_sigma: 0.02
+  dropout_prob: 0.02
+  sees_furniture: true

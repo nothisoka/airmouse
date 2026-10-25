@@ -6,7 +6,7 @@ from enum import Enum, auto
 from typing import List, Optional, Tuple
 import numpy as np
 
-from airmouse.core.hal import DroneState, PoseQuality, VelocityCommand, FlightInterface
+from airmouse.core.hal import DroneState, PoseQuality, VelocityCommand, FlightInterface, SensorHub
 from airmouse.core.mapping.occupancy_grid import OccupancyGrid
 from airmouse.core.planning.astar import AStarPlanner
 from airmouse.core.exploration.frontier_detector import FrontierDetector
@@ -52,11 +52,13 @@ class MissionCoordinator:
         cruise_speed_mps: Optional[float] = None,
         return_home_margin: Optional[float] = None,
         frontier_min_cluster_size: Optional[int] = None,
+        sensor_hub: Optional[SensorHub] = None,
     ):
         cfg = _get_default_mission_config()
         self.start_world = start_world
         self.grid_map = grid_map
         self.flight = flight
+        self.sensor_hub = sensor_hub
         self.max_flight_time = float(max_flight_time_s if max_flight_time_s is not None else cfg.get("max_flight_time_s", 600.0))
         self.low_battery_pct = float(low_battery_pct if low_battery_pct is not None else cfg.get("low_battery_threshold_pct", 20.0))
         self.target_alt = float(target_altitude_m if target_altitude_m is not None else cfg.get("takeoff_altitude_m", 1.2))

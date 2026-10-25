@@ -46,6 +46,57 @@ class CameraFrame:
     height: int
     fov_h_rad: float
     fov_v_rad: float
+    name: str = "front"          # "front" or "down"
+
+    @property
+    def frame(self) -> np.ndarray:
+        """Alias for image_bgr."""
+        return self.image_bgr
+
+    @property
+    def timestamp(self) -> float:
+        """Alias for timestamp_s."""
+        return self.timestamp_s
+
+
+class Camera(ABC):
+    """Abstract interface for a camera sensor."""
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Name of the camera: 'front' or 'down'."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def read(self) -> Optional[CameraFrame]:
+        """Poll the latest camera frame: returns CameraFrame(frame, timestamp, name)."""
+        raise NotImplementedError
+
+
+@dataclass
+class LidarScan:
+    """2D planar lidar scan."""
+    ranges: np.ndarray           # 1D array of ranges in meters
+    angle_min: float             # start angle in radians
+    angle_increment: float       # angular distance between consecutive rays in radians
+    range_min: float             # minimum range in meters
+    range_max: float             # maximum range in meters
+    timestamp: float             # timestamp in seconds
+
+    @property
+    def timestamp_s(self) -> float:
+        """Alias for timestamp."""
+        return self.timestamp
+
+
+class Lidar2D(ABC):
+    """Abstract interface for 2D planar lidar."""
+
+    @abstractmethod
+    def read(self) -> Optional[LidarScan]:
+        """Poll the latest lidar scan. Returns None if no new scan is ready."""
+        raise NotImplementedError
 
 
 @dataclass
@@ -93,6 +144,19 @@ class SensorHub(ABC):
     def get_time(self) -> float:
         """Current monotonic simulation / system time in seconds."""
         raise NotImplementedError
+
+    def has_sensor(self, name: str) -> bool:
+        """Check if a sensor is present and enabled in the active profile:
+        'mpu6050' (or 'imu'), 'ultrasonic' (or 'ranges'), 'camera_front', 'camera_down', 'lidar2d'."""
+        return False
+
+    def get_camera(self, name: str = "front") -> Optional[Camera]:
+        """Return Camera interface by name ('front' or 'down'), or None if not present."""
+        return None
+
+    def get_lidar(self) -> Optional[Lidar2D]:
+        """Return Lidar2D interface, or None if not present."""
+        return None
 
 
 class FlightInterface(ABC):

@@ -12,12 +12,102 @@ from typing import Dict, List, Optional, Tuple
 import cv2
 import numpy as np
 
-from airmouse.core.hal import SensorHub, ImuData, RangeData, CameraFrame
+from airmouse.core.hal import (
+    SensorHub,
+    ImuData,
+    RangeData,
+    CameraFrame,
+    Camera,
+    Lidar2D,
+    LidarScan,
+)
 from airmouse.backends.pygame_sim.drone_dynamics import DroneDynamics
 from airmouse.backends.pygame_sim.world_renderer import WorldRenderer
 
 
+class SimulatedCamera(Camera):
+    """Simulated camera sensor implementing HAL Camera interface."""
+
+    def __init__(
+        self,
+        name: str,
+        renderer: WorldRenderer,
+        drone: DroneDynamics,
+        get_time_fn,
+        rate_hz: float = 20.0,
+        fov_v_deg: float = 55.0,
+    ):
+        self._name = name
+        self.renderer = renderer
+        self.drone = drone
+        self.get_time_fn = get_time_fn
+        self.rate_hz = rate_hz
+        self.period = 1.0 / rate_hz
+        self.fov_v_rad = math.radians(fov_v_deg)
+        self.last_read_time = -1.0
+        self.cached_frame: Optional[CameraFrame] = None
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def read(self) -> Optional[CameraFrame]:
+        sim_time = self.get_time_fn()
+        if sim_time - self.last_read_time < self.period - 1e-4:
+            return None
+
+        self.last_read_time = sim_time
+        state = self.drone.get_state()
+
+        if self._name == "front":
+            frame_bgr = self.renderer.render_camera_frame(
+                drone_pos=state.position,
+                drone_yaw=state.attitude_rpy[2],
+                drone_pitch=state.attitude_rpy[1],
+                drone_roll=state.attitude_rpy[0],
+                survivors=[s for s in getattr(self.renderer, "true_survivors", [])],
+            )
+            self.cached_frame = CameraFrame(
+                timestamp_s=sim_time,
+                image_bgr=frame_bgr,
+                width=self.renderer.w,
+                height=self.renderer.h,
+                fov_h_rad=self.renderer.fov_h,
+                fov_v_rad=self.fov_v_rad,
+                name="front",
+            )
+            return self.cached_frame
+        elif self._name == "down":
+            # Downward camera simulation will be implemented in D14
+            return None
+        return None
+
+
 class SimulatedSensorHub(SensorHub):
+    PROFILE_DEFAULTS = {
+        "baseline": {
+            "mpu6050": True,
+            "ultrasonic": True,
+            "camera_front": True,
+            "camera_down": False,
+            "lidar2d": False,
+        },
+        "flow": {
+            "mpu6050": True,
+            "ultrasonic": True,
+            "camera_front": True,
+            "camera_down": True,
+            "lidar2d": False,
+        },
+        "full": {
+            "mpu6050": True,
+            "ultrasonic": True,
+            "camera_front": True,
+            "camera_down": True,
+            "lidar2d": True,
+        },
+    }
+
     def __init__(
         self,
         drone: DroneDynamics,
@@ -27,12 +117,26 @@ class SimulatedSensorHub(SensorHub):
         imu_rate_hz: float = 100.0,
         range_rate_hz: float = 20.0,
         camera_rate_hz: float = 20.0,
+        profile: str = "baseline",
+        sensors_config: Optional[dict] = None,
     ):
         self.drone = drone
         self.renderer = renderer
         self.grid = grid
         self.rows, self.cols = grid.shape
         self.cell_size = cell_size_m
+        self.profile = profile
+
+        # Resolve enabled sensors
+        prof_map = self.PROFILE_DEFAULTS.get(profile, self.PROFILE_DEFAULTS["baseline"])
+        if sensors_config and "profiles" in sensors_config and profile in sensors_config["profiles"]:
+            prof_map = sensors_config["profiles"][profile]
+        self.enabled_sensors = dict(prof_map)
+        if sensors_config:
+            for sname in ("mpu6050", "ultrasonic", "camera_front", "camera_down", "lidar2d"):
+                s_sec = sensors_config.get(sname)
+                if isinstance(s_sec, dict) and "enabled" in s_sec:
+                    self.enabled_sensors[sname] = bool(self.enabled_sensors.get(sname, False) and s_sec["enabled"])
 
         self.imu_period = 1.0 / imu_rate_hz
         self.range_period = 1.0 / range_rate_hz
@@ -67,6 +171,30 @@ class SimulatedSensorHub(SensorHub):
             ("rear", math.pi),
         ]
 
+        # Camera sensors
+        self.camera_front: Optional[SimulatedCamera] = None
+        if self.has_sensor("camera_front"):
+            self.camera_front = SimulatedCamera(
+                name="front",
+                renderer=renderer,
+                drone=drone,
+                get_time_fn=self.get_time,
+                rate_hz=camera_rate_hz,
+            )
+
+        self.camera_down: Optional[SimulatedCamera] = None
+        if self.has_sensor("camera_down"):
+            self.camera_down = SimulatedCamera(
+                name="down",
+                renderer=renderer,
+                drone=drone,
+                get_time_fn=self.get_time,
+                rate_hz=camera_rate_hz,
+            )
+
+        # Lidar sensor placeholder (implemented in D3)
+        self.lidar: Optional[Lidar2D] = None
+
         # Cache latest readings
         self.cached_ranges: Dict[str, RangeData] = {}
         self.cached_camera: Optional[CameraFrame] = None
@@ -77,7 +205,32 @@ class SimulatedSensorHub(SensorHub):
     def get_time(self) -> float:
         return self.sim_time
 
+    def has_sensor(self, name: str) -> bool:
+        alias_map = {
+            "imu": "mpu6050",
+            "ranges": "ultrasonic",
+            "sonar": "ultrasonic",
+            "camera": "camera_front",
+            "lidar": "lidar2d",
+        }
+        canonical = alias_map.get(name, name)
+        return bool(self.enabled_sensors.get(canonical, False))
+
+    def get_camera(self, name: str = "front") -> Optional[Camera]:
+        if name == "front" and self.has_sensor("camera_front"):
+            return self.camera_front
+        elif name == "down" and self.has_sensor("camera_down"):
+            return self.camera_down
+        return None
+
+    def get_lidar(self) -> Optional[Lidar2D]:
+        if self.has_sensor("lidar2d"):
+            return self.lidar
+        return None
+
     def read_imu(self) -> Optional[ImuData]:
+        if not self.has_sensor("mpu6050"):
+            return None
         if self.sim_time - self.last_imu_time < self.imu_period - 1e-4:
             return None
 
@@ -122,6 +275,8 @@ class SimulatedSensorHub(SensorHub):
         )
 
     def read_ranges(self) -> Dict[str, RangeData]:
+        if not self.has_sensor("ultrasonic"):
+            return {}
         if self.sim_time - self.last_range_time < self.range_period - 1e-4:
             return {}
 
@@ -185,31 +340,10 @@ class SimulatedSensorHub(SensorHub):
         return ranges
 
     def read_camera(self) -> Optional[CameraFrame]:
-        if self.sim_time - self.last_camera_time < self.camera_period - 1e-4:
-            return None
-
-        self.last_camera_time = self.sim_time
-        state = self.drone.get_state()
-        survivors = self.renderer.boxes  # renderer knows survivor positions internally
-
-        # Get survivors from map metadata via renderer
-        frame_bgr = self.renderer.render_camera_frame(
-            drone_pos=state.position,
-            drone_yaw=state.attitude_rpy[2],
-            drone_pitch=state.attitude_rpy[1],
-            drone_roll=state.attitude_rpy[0],
-            survivors=[s for s in getattr(self.renderer, 'true_survivors', [])],
-        )
-
-        self.cached_camera = CameraFrame(
-            timestamp_s=self.sim_time,
-            image_bgr=frame_bgr,
-            width=self.renderer.w,
-            height=self.renderer.h,
-            fov_h_rad=self.renderer.fov_h,
-            fov_v_rad=math.radians(55.0),
-        )
-        return self.cached_camera
+        if self.camera_front is not None:
+            self.cached_camera = self.camera_front.read()
+            return self.cached_camera
+        return None
 
     def _cast_ray_2d(self, x0: float, y0: float, angle: float, max_dist: float) -> float:
         """Raymarch against grid cells to find nearest obstacle distance."""

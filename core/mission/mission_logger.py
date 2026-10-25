@@ -37,6 +37,7 @@ def determine_exit_reason(
 
 @dataclass
 class MissionMetrics:
+    profile: str = "baseline"
     flight_time_s: float = 0.0
     total_time_s: float = 0.0
     path_length_m: float = 0.0
@@ -117,6 +118,7 @@ class MissionLogger:
         exit_reason: str = "COMPLETE",
         landed: Optional[bool] = None,
         coverage_target_pct: float = 90.0,
+        profile: str = "baseline",
     ) -> MissionMetrics:
         # Distance traveled
         dist = 0.0
@@ -166,6 +168,7 @@ class MissionLogger:
         success = (final_exit_reason == "COMPLETE")
 
         return MissionMetrics(
+            profile=profile,
             flight_time_s=flight_time_s,
             total_time_s=flight_time_s,
             path_length_m=dist,

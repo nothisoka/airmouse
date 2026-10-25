@@ -229,7 +229,7 @@ Always POSE_MODE=estimated in this phase. The goal is to measure what each senso
   docs/baselines/D1_baseline_house.md and D1_baseline_maze.md.
   DONE WHEN: both files exist and are committed. All later tables are compared with these.
 
-- [ ] D2 Sensor profiles + HAL interfaces
+- [x] D2 Sensor profiles + HAL interfaces
   DO: (a) add `profile: baseline|flow|full` and per-sensor `enabled:` flags in config/sensors.yaml.
   (b) In core/hal.py add abstract interfaces: `Lidar2D.read()` -> ranges[], angle_min, angle_increment,
   range_min, range_max, timestamp; `Camera.read()` -> frame, timestamp, name ("front" or "down").
