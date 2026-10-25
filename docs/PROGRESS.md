@@ -815,6 +815,27 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   - Full test suite: `pytest -q` -> 51 passed in 17.71s.
 - **DONE WHEN:** Unit tests passed; zero-ground-truth test passed; full test suite passed.
 
+### Task D4: Lidar occupancy mapping
+- **DO:**
+  1. In `core/mapping/occupancy_grid.py`, implemented `update_lidar_scan(start_wx, start_wy, yaw_rad, scan)`:
+     - Iterates through all ranges in `scan.ranges`.
+     - Skips invalid rays (< `scan.range_min`).
+     - Steps free-space raycast from start pose to hit point with step size `res * 0.75`, marking cells free in log-odds.
+     - Deduplicates adjacent raycast steps to avoid redundant updates.
+     - If ray distance is less than `scan.range_max - 0.05`, marks the hit cell as occupied with directional penetration offset `hit_offset = min(0.05, self.res * 0.2)` to ensure surface hits register in obstacle cells rather than open boundary cells.
+     - If ray distance is at or near `scan.range_max`, skips occupied update completely, preventing false wall artifacts in open areas.
+  2. In `run.py`, wired Step 4d in the main autonomy loop:
+     - Polls `sensor_hub.read_lidar()`.
+     - Updates `grid_map.update_lidar_scan(drone_state.x, drone_state.y, drone_state.yaw, scan)` when available.
+  3. Added unit tests in `tests/test_lidar_mapping.py` testing classification accuracy and max-range return behavior.
+- **CHECK Output:**
+  - `tests/test_lidar_mapping.py::test_lidar_mapping_known_scene_accuracy` PASSED: Evaluated 1032 observed cells in a 10x10 m room against simulation ground truth, achieving **100.0%** classification accuracy (well above >= 95% requirement).
+  - `tests/test_lidar_mapping.py::test_lidar_mapping_skips_max_range_occupied_update` PASSED: Max-range ray marks free space along trajectory but creates zero occupied cells.
+  - Regression check: `PROFILE=baseline scripts/run_headless.sh maps/house_00042.json d4_regress --max-time 10 --hard-limit 15` completed without crashing.
+  - Full test suite: 53 passed in 19.26s.
+- **DONE WHEN:** Unit tests passed; regression run completed cleanly.
+
+
 
 
 

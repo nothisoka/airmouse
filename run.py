@@ -357,6 +357,21 @@ def run_pygame_sim(
                     new_s = mission.tracker.confirmed_survivors[-1]
                     print(f"[SURVIVOR CONFIRMED] Survivor #{new_s.id} confirmed at ({new_s.estimated_pos[0]:.2f}, {new_s.estimated_pos[1]:.2f}) at t={sim_time:.1f}s.")
 
+        # Step 4d: Poll 2D Lidar (8 Hz) & Update Occupancy Grid
+        lidar = sensor_hub.get_lidar()
+        if lidar is not None:
+            scan = lidar.read()
+            if scan is not None:
+                drone_state = ekf.get_state(sim_time)
+                true_phys = drone.get_state()
+                active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
+                grid_map.update_lidar_scan(
+                    start_wx=active_pose.position[0],
+                    start_wy=active_pose.position[1],
+                    yaw_rad=active_pose.attitude_rpy[2],
+                    scan=scan,
+                )
+
         # Periodic status logging in terminal
         true_phys = drone.get_state()
         active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state

@@ -12,6 +12,8 @@ from typing import List, Optional, Tuple
 import cv2
 import numpy as np
 
+from airmouse.core.hal import LidarScan
+
 
 class OccupancyGrid:
     def __init__(
@@ -57,6 +59,73 @@ class OccupancyGrid:
 
     def in_bounds(self, gx: int, gy: int) -> bool:
         return 0 <= gx < self.cols and 0 <= gy < self.rows
+
+    def update_lidar_scan(
+        self,
+        start_wx: float,
+        start_wy: float,
+        yaw_rad: float,
+        scan: LidarScan,
+    ):
+        """Update occupancy grid log-odds using a 2D planar lidar scan.
+
+        - Marks free space along each ray up to the hit point (or max range)
+        - Marks occupied cell at the hit point
+        - Skips occupied update for max-range returns (dropouts or open space)
+        """
+        step = self.res * 0.75
+        l_free = self.l_free
+        l_occ = self.l_occ
+        l_min = self.l_min
+        l_max = self.l_max
+
+        angle_min = scan.angle_min
+        angle_inc = scan.angle_increment
+        r_min = scan.range_min
+        r_max = scan.range_max
+
+        num_rays = len(scan.ranges)
+        for i in range(num_rays):
+            r = float(scan.ranges[i])
+            if r < r_min or math.isnan(r):
+                continue
+
+            ray_angle = yaw_rad + angle_min + i * angle_inc
+            cos_a = math.cos(ray_angle)
+            sin_a = math.sin(ray_angle)
+
+            # Determine whether this ray is an obstacle hit or max-range return
+            is_hit = (r < r_max - 0.05)
+            free_end_dist = (r - self.res * 0.5) if is_hit else min(r, r_max)
+
+            # Trace free space along ray
+            last_gx, last_gy = -1, -1
+            dist = step
+            while dist <= free_end_dist:
+                wx = start_wx + dist * cos_a
+                wy = start_wy + dist * sin_a
+                gx, gy = self.world_to_grid(wx, wy)
+                if not self.in_bounds(gx, gy):
+                    break
+                if gx != last_gx or gy != last_gy:
+                    nval = self.log_odds[gy, gx] + l_free
+                    if nval < l_min:
+                        nval = l_min
+                    self.log_odds[gy, gx] = nval
+                    last_gx, last_gy = gx, gy
+                dist += step
+
+            # Occupied cell at hit point (skip max-range returns)
+            if is_hit:
+                hit_offset = min(0.05, self.res * 0.2)
+                hit_wx = start_wx + (r + hit_offset) * cos_a
+                hit_wy = start_wy + (r + hit_offset) * sin_a
+                gx, gy = self.world_to_grid(hit_wx, hit_wy)
+                if self.in_bounds(gx, gy):
+                    nval = self.log_odds[gy, gx] + l_occ
+                    if nval > l_max:
+                        nval = l_max
+                    self.log_odds[gy, gx] = nval
 
     def update_beam(
         self,

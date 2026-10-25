@@ -252,7 +252,7 @@ Always POSE_MODE=estimated in this phase. The goal is to measure what each senso
   within 3 sigma.
   DONE WHEN: test passes; the zero-ground-truth test still passes.
 
-- [ ] D4 Lidar occupancy mapping
+- [x] D4 Lidar occupancy mapping
   DO: add lidar rays to the occupancy grid update in core/mapping (log-odds: free along the ray, occupied
   at the hit, skip max-range returns for the occupied update). Uses the ESTIMATED pose only.
   CHECK: unit test with a known scene and the true pose: >= 95% of cells classified correctly.
