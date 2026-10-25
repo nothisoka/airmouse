@@ -158,6 +158,10 @@ class SensorHub(ABC):
         """Return Lidar2D interface, or None if not present."""
         return None
 
+    def read_lidar(self) -> Optional[LidarScan]:
+        """Poll the latest 2D lidar scan if available."""
+        return None
+
 
 class FlightInterface(ABC):
     """Abstract interface to command drone motion and query platform status."""

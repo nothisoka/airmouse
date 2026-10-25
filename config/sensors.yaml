@@ -98,9 +98,14 @@ camera_down:
 lidar2d:
   enabled: false
   rate_hz: 8.0
+  lidar_rate_hz: 8.0
   num_rays: 360
   min_range_m: 0.15
   max_range_m: 12.0
+  lidar_range_max: 12.0
   noise_sigma: 0.02
+  lidar_noise_sigma: 0.02
   dropout_prob: 0.02
+  lidar_dropout: 0.02
   sees_furniture: true
+  lidar_sees_furniture: true

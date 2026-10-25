@@ -792,6 +792,29 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   - Test suite: `pytest -q` -> 47 passed in 13.0s.
 - **DONE WHEN:** Check passed; unit tests passed; full test suite passed.
 
+### Task D3: Lidar simulation (backend only)
+- **DO:**
+  1. In `backends/pygame_sim/sensor_sim.py`, implemented `SimulatedLidar2D(Lidar2D)`:
+     - 360 rays ($1^\circ$ resolution spanning $[0, 2\pi)$)
+     - Valid range $0.15\text{ m}$ to $12.0\text{ m}$
+     - Gaussian range noise $\sigma = 0.02\text{ m}$
+     - $2\%$ random dropouts returning `range_max` ($12.0\text{ m}$)
+     - $8\text{ Hz}$ update rate
+     - Raycasts against true simulation grid from true drone pose at flight altitude with sub-millimeter bisection refinement.
+     - Documented that physical 2D planar lidars scan only their mounting plane (~1.2m) and would miss obstacles below their plane; simulator treats furniture/obstacles matching the 2D obstacle model.
+     - Config keys supported: `lidar_rate_hz`, `lidar_range_max`, `lidar_noise_sigma`, `lidar_dropout`, `lidar_sees_furniture`.
+     - Hands only noisy measurements to `core/` through `LidarScan` dataclass in HAL.
+  2. Integrated `SimulatedLidar2D` into `SimulatedSensorHub`, instantiated when profile has `lidar2d: true` (e.g. `profile: full`), accessible via `hub.get_lidar()` and `hub.read_lidar()`.
+  3. Added unit tests in `tests/test_lidar_sim.py`.
+- **CHECK Output:**
+  - `tests/test_lidar_sim.py::test_lidar_room_distances_within_3_sigma` PASSED: drone in empty 10x10 m room with inner boundaries at $[1.0, 9.0]$ returns non-dropout distances matching analytical wall distances within $3\sigma = 0.06\text{ m}$ across $>99\%$ of rays.
+  - `tests/test_lidar_sim.py::test_lidar_zero_noise_accuracy` PASSED: exact raycast accuracy within $<0.005\text{ m}$ across all 360 rays.
+  - `tests/test_lidar_sim.py::test_lidar_cardinal_directions` PASSED: exact $4.00\text{ m}$ distance to North, South, East, West walls.
+  - `tests/test_lidar_sim.py::test_lidar_hub_integration_full_profile` PASSED: `SimulatedSensorHub` in `full` profile correctly provides `Lidar2D` interface and rate-limited `LidarScan`.
+  - Zero-ground-truth check: `pytest -q tests/test_zero_ground_truth.py` PASSED (no backend imports in `core/`).
+  - Full test suite: `pytest -q` -> 51 passed in 17.71s.
+- **DONE WHEN:** Unit tests passed; zero-ground-truth test passed; full test suite passed.
+
 
 
 

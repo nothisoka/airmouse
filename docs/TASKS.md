@@ -241,7 +241,7 @@ Always POSE_MODE=estimated in this phase. The goal is to measure what each senso
 
 ### D-II  360-degree lidar
 
-- [ ] D3 Lidar simulation (backend only)
+- [x] D3 Lidar simulation (backend only)
   DO: in backends/pygame_sim/sensor_sim.py add a 2D lidar: 360 rays (1 degree), range 0.15 to 12 m,
   Gaussian range noise sigma 0.02 m, 2% random dropouts (return range_max), 8 Hz, ray-cast against the
   true grid from the true pose at flight altitude. Config keys: lidar_rate_hz, lidar_range_max,

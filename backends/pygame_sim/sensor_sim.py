@@ -83,6 +83,130 @@ class SimulatedCamera(Camera):
         return None
 
 
+class SimulatedLidar2D(Lidar2D):
+    """2D 360-degree planar lidar sensor simulation.
+
+    Emits 360 rays (1 degree resolution) spanning 0.15m to 12.0m.
+    Raycasts against the true simulation grid from the true drone pose at flight altitude.
+    Applies Gaussian range noise (sigma=0.02m) and random dropouts (2% return range_max).
+
+    Physical Reality Note:
+    A real planar 2D lidar mounted horizontally on a drone flying at ~1.2m altitude
+    only scans obstacles in its horizontal scan plane and would miss low floor obstacles,
+    carpets, or low furniture below its plane. In this simulator, obstacle grid cells
+    (walls, furniture) are treated as obstacles matching the simulator's obstacle model.
+    """
+
+    def __init__(
+        self,
+        drone: DroneDynamics,
+        grid: np.ndarray,
+        cell_size_m: float = 1.0,
+        get_time_fn=None,
+        rate_hz: float = 8.0,
+        num_rays: int = 360,
+        range_min: float = 0.15,
+        range_max: float = 12.0,
+        noise_sigma: float = 0.02,
+        dropout_prob: float = 0.02,
+        sees_furniture: bool = True,
+        angle_min: float = 0.0,
+    ):
+        self.drone = drone
+        self.grid = grid
+        self.rows, self.cols = grid.shape
+        self.cell_size = cell_size_m
+        self.get_time_fn = get_time_fn
+        self.rate_hz = rate_hz
+        self.period = 1.0 / rate_hz
+        self.num_rays = num_rays
+        self.range_min = range_min
+        self.range_max = range_max
+        self.noise_sigma = noise_sigma
+        self.dropout_prob = dropout_prob
+        self.sees_furniture = sees_furniture
+        self.angle_min = angle_min
+        self.angle_increment = 2.0 * math.pi / float(num_rays)
+
+        self.last_scan_time = -1.0
+        self.cached_scan: Optional[LidarScan] = None
+
+    def read(self) -> Optional[LidarScan]:
+        sim_time = self.get_time_fn() if self.get_time_fn else 0.0
+        if self.last_scan_time >= 0 and (sim_time - self.last_scan_time < self.period - 1e-4):
+            return None
+
+        self.last_scan_time = sim_time
+        state = self.drone.get_state()
+        x0, y0 = float(state.position[0]), float(state.position[1])
+        yaw = float(state.attitude_rpy[2])
+
+        ranges = np.zeros(self.num_rays, dtype=np.float32)
+        for i in range(self.num_rays):
+            angle_body = self.angle_min + i * self.angle_increment
+            angle_world = yaw + angle_body
+
+            # Raycast against grid
+            dist = self._cast_ray(x0, y0, angle_world, self.range_max)
+
+            # 2% dropout: returns range_max
+            if random.random() < self.dropout_prob:
+                ranges[i] = self.range_max
+            else:
+                noise = np.random.normal(0.0, self.noise_sigma)
+                noisy_dist = float(np.clip(dist + noise, self.range_min, self.range_max))
+                ranges[i] = noisy_dist
+
+        self.cached_scan = LidarScan(
+            ranges=ranges,
+            angle_min=self.angle_min,
+            angle_increment=self.angle_increment,
+            range_min=self.range_min,
+            range_max=self.range_max,
+            timestamp=sim_time,
+        )
+        return self.cached_scan
+
+    def _cast_ray(self, x0: float, y0: float, angle: float, max_dist: float) -> float:
+        """Raycast against grid cells with sub-millimeter bisection refinement."""
+        cos_a = math.cos(angle)
+        sin_a = math.sin(angle)
+        step = 0.10
+        d = 0.0
+        hit = False
+        while d < max_dist:
+            d += step
+            rx = x0 + d * cos_a
+            ry = y0 + d * sin_a
+            cx = int(rx / self.cell_size)
+            cy = int(self.rows - (ry / self.cell_size))
+            if cx < 0 or cx >= self.cols or cy < 0 or cy >= self.rows:
+                hit = True
+                break
+            if self.grid[cy, cx] != 0:
+                hit = True
+                break
+
+        if not hit:
+            return max_dist
+
+        # Refine intersection boundary using binary search bisection
+        d_low = max(0.0, d - step)
+        d_high = min(max_dist, d)
+        for _ in range(8):
+            d_mid = 0.5 * (d_low + d_high)
+            rx = x0 + d_mid * cos_a
+            ry = y0 + d_mid * sin_a
+            cx = int(rx / self.cell_size)
+            cy = int(self.rows - (ry / self.cell_size))
+            if cx < 0 or cx >= self.cols or cy < 0 or cy >= self.rows or self.grid[cy, cx] != 0:
+                d_high = d_mid
+            else:
+                d_low = d_mid
+
+        return d_high
+
+
 class SimulatedSensorHub(SensorHub):
     PROFILE_DEFAULTS = {
         "baseline": {
@@ -192,8 +316,32 @@ class SimulatedSensorHub(SensorHub):
                 rate_hz=camera_rate_hz,
             )
 
-        # Lidar sensor placeholder (implemented in D3)
-        self.lidar: Optional[Lidar2D] = None
+        # 2D Planar Lidar
+        lidar_cfg = {}
+        if sensors_config and "lidar2d" in sensors_config and isinstance(sensors_config["lidar2d"], dict):
+            lidar_cfg = sensors_config["lidar2d"]
+
+        lidar_rate_hz = float(lidar_cfg.get("lidar_rate_hz", lidar_cfg.get("rate_hz", 8.0)))
+        lidar_range_max = float(lidar_cfg.get("lidar_range_max", lidar_cfg.get("max_range_m", 12.0)))
+        lidar_noise_sigma = float(lidar_cfg.get("lidar_noise_sigma", lidar_cfg.get("noise_sigma", 0.02)))
+        lidar_dropout = float(lidar_cfg.get("lidar_dropout", lidar_cfg.get("dropout_prob", 0.02)))
+        lidar_sees_furniture = bool(lidar_cfg.get("lidar_sees_furniture", lidar_cfg.get("sees_furniture", True)))
+
+        self.lidar: Optional[SimulatedLidar2D] = None
+        if self.has_sensor("lidar2d"):
+            self.lidar = SimulatedLidar2D(
+                drone=drone,
+                grid=grid,
+                cell_size_m=cell_size_m,
+                get_time_fn=self.get_time,
+                rate_hz=lidar_rate_hz,
+                num_rays=360,
+                range_min=0.15,
+                range_max=lidar_range_max,
+                noise_sigma=lidar_noise_sigma,
+                dropout_prob=lidar_dropout,
+                sees_furniture=lidar_sees_furniture,
+            )
 
         # Cache latest readings
         self.cached_ranges: Dict[str, RangeData] = {}
@@ -226,6 +374,11 @@ class SimulatedSensorHub(SensorHub):
     def get_lidar(self) -> Optional[Lidar2D]:
         if self.has_sensor("lidar2d"):
             return self.lidar
+        return None
+
+    def read_lidar(self) -> Optional[LidarScan]:
+        if self.lidar is not None:
+            return self.lidar.read()
         return None
 
     def read_imu(self) -> Optional[ImuData]:
