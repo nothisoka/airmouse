@@ -258,7 +258,7 @@ Always POSE_MODE=estimated in this phase. The goal is to measure what each senso
   CHECK: unit test with a known scene and the true pose: >= 95% of cells classified correctly.
   DONE WHEN: test passes.
 
-- [ ] D5 Scan matcher
+- [x] D5 Scan matcher
   DO: write core/estimation/scan_matcher.py: match the current scan to the current map (correlative scan
   matching or point-to-grid ICP), return a pose correction (dx, dy, dyaw), a match score and a covariance.
   Reject matches below a score threshold or in featureless corridors (degenerate geometry).
