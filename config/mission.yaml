@@ -2,9 +2,9 @@
 mission:
   max_survivors: 6
   coverage_target: 0.90        # Exploration target (0.90 = 90% of reachable free space)
-  max_flight_time_s: 240.0      # Planned flight budget
-  hard_time_limit_s: 280.0      # Hard simulation time ceiling
-  max_sim_steps: 28000          # Hard simulation step ceiling (100 Hz * 280s)
+  max_flight_time_s: 600.0      # Planned flight budget
+  hard_time_limit_s: 660.0      # Hard simulation time ceiling
+  max_sim_steps: 66000          # Hard simulation step ceiling (100 Hz * 660s)
   battery_capacity_mah: 2200
   nominal_current_draw_a: 12.0
   low_battery_threshold_pct: 25.0
@@ -15,6 +15,7 @@ mission:
   nominal_cruise_speed_mps: 0.6
   max_cruise_speed_mps: 1.0
   max_yaw_rate_rads: 1.2
+  return_home_margin: 0.30     # Fraction of time budget reserved for RTH (triggers at 70% elapsed)
 
   rth_criterion:
     all_survivors_found: true

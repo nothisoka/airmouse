@@ -118,7 +118,7 @@ CHECKPOINT A — stop and report the four baseline tables.
 
 Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
 
-- [ ] B1 Configurable budget
+- [x] B1 Configurable budget
   DO: move flight-time limit, hard time limit, cruise speed and return-home margin into
   config/mission.yaml and make the code read them (no hardcoded values; use the CODEMAP). Defaults:
   max_flight_time_s 600, hard_time_limit_s 660, cruise speed unchanged.

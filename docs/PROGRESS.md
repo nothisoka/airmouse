@@ -355,6 +355,20 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
 
 - **Result:** Baseline benchmark tables recorded and committed without code changes; all 18 unit tests pass.
 
+### Task B1: Configurable budget
+- **DO:** Moved flight-time limit, hard time limit, cruise speed, and return-home margin into `config/mission.yaml` and wired `core/mission/state_machine.py` and `run.py` to read them dynamically. Configured defaults: `max_flight_time_s: 600.0`, `hard_time_limit_s: 660.0`, `max_sim_steps: 66000`, `nominal_cruise_speed_mps: 0.6`, `return_home_margin: 0.30`.
+- **CHECK:** Changed yaml parameters to `max_flight_time_s: 750.0`, `hard_time_limit_s: 820.0`, `nominal_cruise_speed_mps: 0.75`, `return_home_margin: 0.35` and verified the simulation run banner prints the updated values:
+  ```text
+  ========================================================
+    NIDAR AIRMOUSE: Autonomous Search & Sensor Fusion
+    Map: maps/house_00042.json | Headless: True | Seed: 42
+    Planned Budget: 750.0s | Hard Limit: 820.0s (10 steps)
+    Cruise Speed: 0.75 m/s | RTH Margin: 0.35
+  ========================================================
+  ```
+  Restored standard defaults (`600.0s` planned budget, `660.0s` hard limit, `0.60 m/s` cruise speed, `0.30` RTH margin).
+- **Result:** Parameters dynamically loaded and verified; all 18 unit tests pass.
+
 
 
 

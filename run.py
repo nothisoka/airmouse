@@ -127,11 +127,14 @@ def run_pygame_sim(
     cfg = load_mission_config()
     mission_cfg = cfg.get("mission", {})
     if max_flight_time_s is None:
-        max_flight_time_s = float(mission_cfg.get("max_flight_time_s", 240.0))
+        max_flight_time_s = float(mission_cfg.get("max_flight_time_s", 600.0))
     if hard_time_limit_s is None:
-        hard_time_limit_s = float(mission_cfg.get("hard_time_limit_s", max_flight_time_s + 40.0))
+        hard_time_limit_s = float(mission_cfg.get("hard_time_limit_s", max_flight_time_s + 60.0))
     if max_sim_steps is None:
         max_sim_steps = int(mission_cfg.get("max_sim_steps", int(hard_time_limit_s * 100)))
+
+    nominal_cruise_speed = float(mission_cfg.get("nominal_cruise_speed_mps", 0.6))
+    return_home_margin = float(mission_cfg.get("return_home_margin", 0.30))
 
     coverage_target = float(mission_cfg.get("coverage_target", 0.90))
     if coverage_target > 1.0:
@@ -142,6 +145,7 @@ def run_pygame_sim(
     print(f"  NIDAR AIRMOUSE: Autonomous Search & Sensor Fusion")
     print(f"  Map: {resolved_map} | Headless: {headless} | Seed: {seed}")
     print(f"  Planned Budget: {max_flight_time_s:.1f}s | Hard Limit: {hard_time_limit_s:.1f}s ({max_sim_steps} steps)")
+    print(f"  Cruise Speed: {nominal_cruise_speed:.2f} m/s | RTH Margin: {return_home_margin:.2f}")
     print(f"========================================================\n")
 
     np.random.seed(seed)
@@ -196,6 +200,8 @@ def run_pygame_sim(
         grid_map=grid_map,
         flight=flight,
         max_flight_time_s=max_flight_time_s,
+        cruise_speed_mps=nominal_cruise_speed,
+        return_home_margin=return_home_margin,
     )
 
     # Count reachable free cells for coverage metrics

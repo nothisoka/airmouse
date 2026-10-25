@@ -25,22 +25,42 @@ class MissionState(Enum):
     FAILSAFE = auto()
 
 
+def _get_default_mission_config() -> dict:
+    try:
+        from pathlib import Path
+        import yaml
+        cfg_path = Path(__file__).resolve().parent.parent.parent / "config" / "mission.yaml"
+        if cfg_path.exists():
+            with open(cfg_path, "r") as f:
+                data = yaml.safe_load(f)
+                if isinstance(data, dict):
+                    return data.get("mission", {})
+    except Exception:
+        pass
+    return {}
+
+
 class MissionCoordinator:
     def __init__(
         self,
         start_world: Tuple[float, float],
         grid_map: OccupancyGrid,
         flight: FlightInterface,
-        max_flight_time_s: float = 360.0,
-        low_battery_pct: float = 20.0,
-        target_altitude_m: float = 1.2,
+        max_flight_time_s: Optional[float] = None,
+        low_battery_pct: Optional[float] = None,
+        target_altitude_m: Optional[float] = None,
+        cruise_speed_mps: Optional[float] = None,
+        return_home_margin: Optional[float] = None,
     ):
+        cfg = _get_default_mission_config()
         self.start_world = start_world
         self.grid_map = grid_map
         self.flight = flight
-        self.max_flight_time = max_flight_time_s
-        self.low_battery_pct = low_battery_pct
-        self.target_alt = target_altitude_m
+        self.max_flight_time = float(max_flight_time_s if max_flight_time_s is not None else cfg.get("max_flight_time_s", 600.0))
+        self.low_battery_pct = float(low_battery_pct if low_battery_pct is not None else cfg.get("low_battery_threshold_pct", 20.0))
+        self.target_alt = float(target_altitude_m if target_altitude_m is not None else cfg.get("takeoff_altitude_m", 1.2))
+        self.cruise_speed = float(cruise_speed_mps if cruise_speed_mps is not None else cfg.get("nominal_cruise_speed_mps", 0.6))
+        self.return_home_margin = float(return_home_margin if return_home_margin is not None else cfg.get("return_home_margin", 0.30))
 
         self.state = MissionState.PREFLIGHT
         self.start_time = 0.0
@@ -48,7 +68,7 @@ class MissionCoordinator:
         # Subsystems
         self.planner = AStarPlanner()
         self.frontier_detector = FrontierDetector()
-        self.controller = WaypointController()
+        self.controller = WaypointController(max_vel_xy=self.cruise_speed)
         self.avoidance = ReactiveAvoidance()
         self.tracker = SurvivorTracker()
 
@@ -73,8 +93,10 @@ class MissionCoordinator:
 
         # Global failsafe checks during flight
         if self.state == MissionState.EXPLORE:
-            # Reserve 30% of battery/time budget for return-to-home navigation and landing
-            if battery <= self.low_battery_pct or elapsed >= (self.max_flight_time * 0.70):
+            # Reserve return_home_margin of battery/time budget for return-to-home navigation and landing
+            margin_fraction = self.return_home_margin if self.return_home_margin <= 0.5 else (1.0 - self.return_home_margin)
+            rth_trigger_time = self.max_flight_time * (1.0 - margin_fraction)
+            if battery <= self.low_battery_pct or elapsed >= rth_trigger_time:
                 self.state = MissionState.RETURN_HOME
                 self._plan_return_home(drone_state)
             elif drone_state.quality == PoseQuality.CRITICAL:
