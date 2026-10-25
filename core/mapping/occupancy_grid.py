@@ -42,8 +42,8 @@ class OccupancyGrid:
         self.occ_thresh = occ_thresh
         self.free_thresh = free_thresh
 
-        # Precompute circular inflation structuring element
-        self.inflation_radius_m = 0.40
+        # Precompute circular inflation structuring element (0.30m allows 1-cell doorway clearance)
+        self.inflation_radius_m = 0.30
 
     def world_to_grid(self, wx: float, wy: float) -> Tuple[int, int]:
         gx = int((wx - self.origin_x) / self.res)

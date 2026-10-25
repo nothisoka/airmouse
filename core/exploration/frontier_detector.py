@@ -164,10 +164,11 @@ class FrontierDetector:
                         q.append(nbr)
 
             if len(cluster_cells) >= self.min_cluster_size:
-                # Compute centroid
+                # Compute centroid: select cell in cluster closest to mean to guarantee traversability
                 mean_gx = sum(c[0] for c in cluster_cells) / len(cluster_cells)
                 mean_gy = sum(c[1] for c in cluster_cells) / len(cluster_cells)
-                centroid_w = grid_map.grid_to_world(int(round(mean_gx)), int(round(mean_gy)))
+                best_cell = min(cluster_cells, key=lambda c: (c[0] - mean_gx) ** 2 + (c[1] - mean_gy) ** 2)
+                centroid_w = grid_map.grid_to_world(best_cell[0], best_cell[1])
 
                 clusters.append(FrontierCluster(
                     centroid_world=centroid_w,

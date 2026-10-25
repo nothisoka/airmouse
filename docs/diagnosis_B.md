@@ -100,3 +100,4 @@ Even with perfect ground-truth pose estimation (`POSE_MODE=true`), procedural bu
 1. **Fix Cause #1 (Task B4 / B7):** Adjust obstacle inflation and doorway traversal clearance so 1-cell (1.0m) doorways are passable by the planner while maintaining minimum physical drone hull clearance.
 2. **Fix Cause #2 (Task B5 / B8):** Implement a stall and oscillation watchdog (detecting $<0.5\text{m}$ movement for 15s or 3 goal alternations) to blacklist unprogressable local goals and force dynamic replanning to alternate frontiers.
 3. **Fix Cause #3 (Task B6 / B9):** Replace the brittle 10-count failure heuristic with cluster-based exploration-finished detection that only triggers return-home when no reachable frontier clusters exceeding the minimum size remain.
+

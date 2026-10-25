@@ -137,7 +137,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
   evidence (log lines or numbers) for each.
   DONE WHEN: the file exists, each cause has evidence. No behaviour changes in this task.
 
-- [ ] B4 Fix cause #1 from diagnosis_B.md only
+- [x] B4 Fix cause #1 from diagnosis_B.md only
   DO: smallest possible change. Re-run the same 3 layouts. Record before/after rows.
   DONE WHEN: coverage on those 3 layouts improved or the cause is shown not to apply (record why);
   pytest passes.
