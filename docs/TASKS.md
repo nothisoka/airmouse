@@ -1,11 +1,14 @@
-# AirMouse TASK QUEUE
+# AirMouse TASK QUEUE (v2: sensor profiles, lidar, memory, second camera)
 
 Project: autonomous indoor drone simulation. With no prior knowledge of the building it must explore,
 map, find up to 6 survivors, return to its launch point and land.
-Allowed sensors only: MPU6050 IMU, monocular camera, ultrasonic rangers (4 horizontal + 1 down).
-No GPS, no LiDAR, no ground-truth pose in `core/`. Layout: `core/` (pure Python), `backends/`
-(pygame_sim, gazebo_ros2), `generate_maps.py`, `run.py`, `tools/benchmark_suite.py`, `config/*.yaml`,
-`tests/`. Environment: Windows + WSL2 Ubuntu 24.04, ROS 2 Jazzy, Gazebo Harmonic (gz sim 8).
+Sensor profiles (selected in config/sensors.yaml, `profile:` key):
+  baseline = MPU6050 IMU + 5 ultrasonic rangers (4 horizontal, 1 down) + front camera
+  flow     = baseline + downward camera (feature / optical-flow odometry)
+  full     = flow + 360-degree 2D lidar
+No GPS, no ground-truth pose in `core/`. Layout: `core/` (pure Python), `backends/` (pygame_sim,
+gazebo_ros2), `generate_maps.py`, `run.py`, `tools/benchmark_suite.py`, `config/*.yaml`, `tests/`.
+Environment: Windows + WSL2 Ubuntu 24.04, ROS 2 Jazzy, Gazebo Harmonic (gz sim 8).
 
 Tick a box `[x]` in this file when a task is DONE, and commit the tick with the task.
 
@@ -32,22 +35,27 @@ Tick a box `[x]` in this file when a task is DONE, and commit the tick with the 
    environment variables). Then: `git add -A && git commit -m "<TASK-ID>: <summary>"`.
 7. GIT: branch `autonomy-work`, local only. Never push, add remotes, `git reset --hard`, `git clean`.
    Never modify ~/slam_ws.
-8. `core/` never reads ground truth. A debug true-pose flag may exist ONLY in the simulator backend.
-   The zero-ground-truth test must keep passing.
-9. REPORTING: every results table has these columns: layout, took_off, pose_valid (mean drift < 1.0 m),
-   coverage %, survivors found/total, false positives, collision_events, home_error_m, flight_time_s,
-   path_length_m, exit_reason, plus MEAN and WORST rows. Always show results that got WORSE next to
-   ones that improved, and always compare with the previous recorded baseline. Never call mixed results a
-   success. Claims of improvement need at least 10 layouts (20 for final claims), not 5.
+8. `core/` never reads ground truth. Simulated sensors (lidar, cameras, sonar, IMU) live in
+   `backends/` and only hand NOISY MEASUREMENTS to `core/` through the HAL. A debug true-pose flag may
+   exist ONLY in the simulator backend. The zero-ground-truth test must keep passing.
+9. REPORTING: every results table has these columns: layout, profile, took_off, pose_valid (mean drift
+   < 1.0 m), coverage %, survivors found/total, false positives, collision_events, home_error_m,
+   flight_time_s, path_length_m, exit_reason, plus MEAN and WORST rows. Always show results that got WORSE
+   next to ones that improved, and always compare with the previous recorded baseline. Never call mixed
+   results a success. Claims of improvement need at least 10 layouts (20 for final claims), not 5.
 10. CHECKPOINT lines: when you reach one, STOP, print the table, `git log --oneline | head -10`, the
     next task id, and wait for me to say "go".
 11. If anything in a task is unclear or a command does not exist, say so and stop. Do not guess.
+12. REGRESSION GUARD: after any change in core/ or backends/, `pytest -q` plus one headless run of
+    maps/house_00042.json in the profile you touched must still complete without crashing. If the new
+    result is clearly worse than the last recorded one for that layout, say so in PROGRESS.md.
 
 STANDARD COMMANDS
     cd ~/airmouse && source .venv/bin/activate
-    scripts/run_headless.sh <map.json> <label>       # one headless run, one summary line
-    scripts/run_batch.sh <start_seed> <count> <house|maze>   # generate layouts + run + markdown table
-    (both scripts are created in task A4/A8; the oracle/true-pose flag is located in task A3)
+    scripts/run_headless.sh <map.json> <label>
+    scripts/run_batch.sh <start_seed> <count> <house|maze>
+    Environment variables for both scripts:  POSE_MODE=true|estimated   PROFILE=baseline|flow|full
+    (the scripts are created in A4/A8, the POSE_MODE flag is located in A3, PROFILE is added in D2)
 
 ---------------------------------------------------------------------------------------------------
 ## PHASE A — Verify state, metrics, tooling
@@ -78,10 +86,10 @@ STANDARD COMMANDS
   DONE WHEN: the summary line prints with all columns (use "n/a" only for values the code truly lacks).
 
 - [x] A5 Metrics fields
-  DO: compare the metrics JSON against protocol column list. For each missing field, add it in its own
-  small commit: took_off, pose_valid, coverage_pct (of reachable free cells), survivors_found,
+  DO: compare the metrics JSON against the protocol column list. For each missing field, add it in its
+  own small commit: took_off, pose_valid, coverage_pct (of reachable free cells), survivors_found,
   survivors_total, false_positives, collision_events, home_error_m, flight_time_s, path_length_m,
-  exit_reason, frontier_clusters_remaining (replaces "frontiers discovered").
+  exit_reason, frontier_clusters_remaining (replaces "frontiers discovered"), profile.
   DONE WHEN: one run's JSON contains every field and the summary line shows them.
 
 - [x] A6 Collision events
@@ -99,8 +107,7 @@ STANDARD COMMANDS
   DO: create it (chmod +x). It generates layouts with fixed seeds into generated_maps/ using
   generate_maps.py, runs run_headless.sh on each sequentially (foreground), and prints a markdown table
   with the protocol columns and MEAN / WORST rows. A failing run must be recorded as a row, never abort
-  the batch. Support a flag or env var `POSE_MODE=true|estimated` that selects the debug true-pose flag
-  found in A3.
+  the batch. Support `POSE_MODE=true|estimated` selecting the debug true-pose flag found in A3.
   CHECK: `scripts/run_batch.sh 100 3 house`
   DONE WHEN: a 3-row table with MEAN/WORST prints.
 
@@ -108,7 +115,7 @@ STANDARD COMMANDS
   DO: run `scripts/run_batch.sh 100 5 house` and `scripts/run_batch.sh 200 5 maze` twice: once with
   POSE_MODE=true and once with POSE_MODE=estimated. If one layout takes longer than 5 minutes, say so
   and reduce to 3+3. Save the four tables to docs/baselines/A9_true_house.md, A9_true_maze.md,
-  A9_est_house.md, A9_est_maze.md. These are the numbers every later change is compared against.
+  A9_est_house.md, A9_est_maze.md.
   DONE WHEN: the four files exist and are committed.
 
 CHECKPOINT A — stop and report the four baseline tables.
@@ -169,8 +176,8 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
 - [x] B11 Phase B batch
   DO: `scripts/run_batch.sh 100 5 house` and `... 200 5 maze` with POSE_MODE=true. Compare with A9.
   GATE (mean): coverage >= 90%, collision_events ~0, home_error_m < 1.0, no TIMEOUT, no stall.
-  If the gate is not met: you may do at most TWO more rounds of (B3-style diagnosis -> one fix ->
-  rerun). Then report honestly with the table.
+  If the gate is not met: at most TWO more rounds of (B3-style diagnosis -> one fix -> rerun).
+  Then report honestly with the table.
 
 CHECKPOINT B — stop and report the table with worsened cases.
 
@@ -209,81 +216,218 @@ CHECKPOINT B — stop and report the table with worsened cases.
 CHECKPOINT C.
 
 ---------------------------------------------------------------------------------------------------
-## PHASE D — Estimation (estimated pose, only after Phases B and C pass)
+## PHASE D — Sensor profiles, lidar, memory, second camera (estimated pose from here on)
 
-Always POSE_MODE=estimated here. Compare with A9 estimated tables.
+Always POSE_MODE=estimated in this phase. The goal is to measure what each sensor adds, so keep the
+`baseline` profile working throughout and compare every new result with it.
 
-- [ ] D1 Error over time
-  DO: for 2 layouts write a CSV of estimated vs true x, y, yaw per second (true values only in the
-  backend/logging, never in core/). Plot to docs/drift_<layout>.png.
-  DONE WHEN: files exist.
+### D-I  Foundations
 
-- [ ] D2 Drift attribution (NO fixes)
-  DO: ablation runs: (a) gyro-only yaw error over time, (b) visual-odometry velocity scale error on
-  straight flight, (c) accelerometer bias effect. Write docs/diagnosis_D.md ranking the causes.
+- [ ] D1 Baseline re-measure (NO code changes)
+  DO: with the Phase B/C system, PROFILE=baseline (the only profile that exists yet), POSE_MODE=estimated:
+  `scripts/run_batch.sh 100 5 house` and `scripts/run_batch.sh 200 5 maze`. Save to
+  docs/baselines/D1_baseline_house.md and D1_baseline_maze.md.
+  DONE WHEN: both files exist and are committed. All later tables are compared with these.
 
-- [ ] D3 Camera texture for odometry
-  DO: give floor and walls texture in the simulated camera so VO has features.
-  CHECK: unit test: straight 10 m flight, VO distance error < 5%.
+- [ ] D2 Sensor profiles + HAL interfaces
+  DO: (a) add `profile: baseline|flow|full` and per-sensor `enabled:` flags in config/sensors.yaml.
+  (b) In core/hal.py add abstract interfaces: `Lidar2D.read()` -> ranges[], angle_min, angle_increment,
+  range_min, range_max, timestamp; `Camera.read()` -> frame, timestamp, name ("front" or "down").
+  (c) Make the profile selectable in run.py (`--profile`) and via the PROFILE env var in both scripts.
+  (d) Make sure core/ asks the HAL which sensors are present and works with any subset.
+  CHECK: `PROFILE=baseline scripts/run_headless.sh maps/house_00042.json d2_base` gives the same result
+  as before (same exit reason, coverage within 2 points).
+  DONE WHEN: check passes; a test confirms baseline has no lidar object and core still runs.
 
-- [ ] D4 VO scale and outliers
-  DO: scale from the downward sonar, reject outlier flow vectors. Test as D3.
+### D-II  360-degree lidar
 
-- [ ] D5 Yaw correction by wall alignment
-  DO: the MPU6050 has no magnetometer, so yaw drifts. Indoor walls are axis-aligned, so use the dominant
-  wall direction in sonar/scan data to correct yaw. Unit test: injected yaw bias stays bounded.
+- [ ] D3 Lidar simulation (backend only)
+  DO: in backends/pygame_sim/sensor_sim.py add a 2D lidar: 360 rays (1 degree), range 0.15 to 12 m,
+  Gaussian range noise sigma 0.02 m, 2% random dropouts (return range_max), 8 Hz, ray-cast against the
+  true grid from the true pose at flight altitude. Config keys: lidar_rate_hz, lidar_range_max,
+  lidar_noise_sigma, lidar_dropout, lidar_sees_furniture (default true, matching the simulator's obstacle
+  model; document that a real lidar would miss objects below its plane). Hand only the noisy ranges to
+  core/ through the HAL.
+  CHECK: unit test: drone in an empty 10x10 m room returns distances equal to the true wall distances
+  within 3 sigma.
+  DONE WHEN: test passes; the zero-ground-truth test still passes.
 
-- [ ] D6 Gate scan-to-map updates
-  DO: use scan-to-map only when at least 2 sonar returns are in range, reject mismatches over a
-  threshold, use measurement covariance. Re-run 5 layouts; table vs A9 estimated, worsened cases shown.
+- [ ] D4 Lidar occupancy mapping
+  DO: add lidar rays to the occupancy grid update in core/mapping (log-odds: free along the ray, occupied
+  at the hit, skip max-range returns for the occupied update). Uses the ESTIMATED pose only.
+  CHECK: unit test with a known scene and the true pose: >= 95% of cells classified correctly.
+  DONE WHEN: test passes.
 
-- [ ] D7 Pose-quality behaviour
-  DO: pose-quality flag from the EKF covariance; below threshold, slow down and prefer routes near walls;
-  if very low, hold and re-localise. Test with a scripted quality drop.
+- [ ] D5 Scan matcher
+  DO: write core/estimation/scan_matcher.py: match the current scan to the current map (correlative scan
+  matching or point-to-grid ICP), return a pose correction (dx, dy, dyaw), a match score and a covariance.
+  Reject matches below a score threshold or in featureless corridors (degenerate geometry).
+  CHECK: unit test: start with a known scan and map, add a 0.30 m / 5 degree offset; the matcher recovers it
+  to within 0.05 m / 1 degree. A second test with a bad scan must be rejected.
+  DONE WHEN: both tests pass.
 
-- [ ] D8 Phase D batch (10 layouts). GATE: mean drift < 1.0 m, coverage >= 90%, survivors >= 90%,
-  home_error < 1 m, collision_events ~0.
+- [ ] D6 Fuse scan matching into the EKF
+  DO: use the matcher output as an (x, y, yaw) measurement update with its covariance, gated by score.
+  CHECK: synthetic test: IMU with injected bias, straight 20 m flight; drift stays below 0.3 m with the
+  matcher and clearly above that without it.
+  DONE WHEN: test passes.
 
-- [ ] D9 (only if the D8 gate fails) keyframe / loop-closure correction, max 2 rounds. If still failing,
-  write docs/HARDWARE_NOTES.md with evidence and the sensors that would close the gap (for example an
-  optical-flow module such as PMW3901 plus a ToF ranger).
+- [ ] D7 Lidar vs baseline batch (10 layouts)
+  DO: `PROFILE=full scripts/run_batch.sh 100 5 house` and `... 200 5 maze`. Table next to D1.
+  GATE (mean, estimated pose): drift < 0.5 m, coverage >= 90%, survivors >= 90%, home_error < 1 m,
+  collision_events ~0. Show worsened cases. If not met: at most 2 rounds of (diagnose -> one fix -> rerun).
 
-CHECKPOINT D.
+CHECKPOINT D1 — lidar results.
+
+### D-III  Memory component (map + path + keyframes)
+
+- [ ] D8 Design note (NO code)
+  DO: write docs/MEMORY.md (one page): what is stored — occupancy grid, trajectory (timestamped poses,
+  decimated to >= 0.2 m spacing), keyframes (pose + downsampled scan + camera features when available,
+  one per 1 m or 20 degrees travelled), confirmed survivors, home pose, mission state; file format
+  (npz + json, versioned); autosave every 5 s; size bounds.
+  DONE WHEN: file exists and covers every item.
+
+- [ ] D9 MapMemory implementation
+  DO: core/memory/map_memory.py with add_pose, add_keyframe, set_home, add_survivor, save(path), load(path).
+  CHECK: unit tests: save then load gives identical contents; trajectory decimation keeps spacing; size
+  stays below a configured limit on a long synthetic run.
+  DONE WHEN: tests pass.
+
+- [ ] D10 Wire memory into the mission and test crash recovery
+  DO: the mission loop writes to MapMemory and autosaves to generated_maps/<run>/memory.npz. Add a
+  `--resume <memory.npz>` option.
+  CHECK: run headless for 60 s, stop it (timeout), restart with --resume: the log shows the map, home pose
+  and survivors restored and exploration continues from the stored state.
+  DONE WHEN: check passes; test added.
+
+- [ ] D11 Return home using memory
+  DO: plan the way home with A* over the stored map; fall back to following the stored trajectory in
+  reverse if no path exists; log which one was used.
+  CHECK: unit test for both cases.
+  DONE WHEN: test passes.
+
+- [ ] D12 Home relocalisation (loop closure at home)
+  DO: store a keyframe at takeoff. When within 3 m of the estimated home, match the current scan (lidar, or
+  sonar/camera features if the profile has no lidar) against the home keyframe and correct the pose.
+  CHECK: unit test: inject 2 m of drift, home error after relocalisation < 0.5 m; and with no match the
+  mission continues without crashing.
+  DONE WHEN: both tests pass.
+
+- [ ] D13 Return-home batch (10 layouts, PROFILE=full)
+  DO: run with relocalisation off, then on. Table with both.
+  GATE: home_error_m < 1.0 on all layouts (target 0.5); show worsened cases.
+
+CHECKPOINT D2 — memory and return home.
+
+### D-IV  Second camera (downward) and corner / edge features
+
+- [ ] D14 Downward camera simulation (backend only)
+  DO: render a downward-looking frame (320x240) of a textured floor from the true pose. Add a random
+  texture to the floor (backend renderer only). Expose it as Camera "down" through the HAL; the front camera
+  is unchanged; the enable flag is in config/sensors.yaml.
+  CHECK: unit test: move the drone 1.0 m forward at altitude 1.2 m; the texture shifts in the image by the
+  expected number of pixels (focal length x distance / altitude) within 5%.
+  DONE WHEN: test passes.
+
+- [ ] D15 Feature pipeline
+  DO: core/perception/features.py: Gaussian blur (sigma from config) -> Canny edges -> Shi-Tomasi corners
+  (max count, quality level, min distance from config). Return corner coordinates and an edge map.
+  CHECK: unit test on a synthetic checkerboard: corners found within 2 px of the true corners; blur does not
+  remove them.
+  DONE WHEN: test passes.
+
+- [ ] D16 Optical-flow odometry
+  DO: Lucas-Kanade tracking of the corners between consecutive down frames; metric scale = altitude from the
+  downward sonar / focal length; outlier rejection (median or RANSAC); output velocity (vx, vy) and
+  covariance; skip the update when too few features are tracked.
+  CHECK: synthetic straight 10 m flight: distance error < 5%; a textureless frame is skipped cleanly.
+  DONE WHEN: both checks pass.
+
+- [ ] D17 Fuse flow into the EKF and run the flow profile
+  DO: velocity measurement update in the EKF. `PROFILE=flow scripts/run_batch.sh 100 5 house` and
+  `... 200 5 maze`. Table next to D1 (baseline) and D7 (full).
+  DONE WHEN: table recorded; worsened cases listed.
+
+- [ ] D18 Landmark memory (camera features in keyframes)
+  DO: store ORB descriptors and corner positions in keyframes; relocalise at home from features when no
+  lidar is present.
+  CHECK: unit test: inject drift, home error after feature relocalisation < 1.0 m on a textured test world;
+  on a textureless world the code reports "no match" and does not corrupt the pose.
+  DONE WHEN: both tests pass.
+
+- [ ] D19 Final profile comparison
+  DO: 10 layouts each for baseline, flow, full (estimated pose). Write docs/SENSOR_PROFILES.md: one table
+  (drift, coverage, survivors, home error, collisions per profile), which profile meets the gate, and a
+  short hardware note per profile: what is needed (lidar model class, downward camera, ToF/optical-flow
+  option) and a blank line for weight and cost that I will fill in. Do not invent weight or cost numbers.
+  DONE WHEN: the file exists with real numbers from the batches.
+
+CHECKPOINT D3 — sensor profile comparison. I will decide which profile(s) go forward.
+
+### D-baseline (optional — only if I say baseline-only operation must also meet the gate)
+
+- [ ] DB1 Wall-alignment yaw correction (no magnetometer on the MPU6050; indoor walls are axis-aligned);
+  unit test: injected yaw bias stays bounded.
+- [ ] DB2 Gate the sonar scan-to-map updates: only with >= 2 returns in range, reject large mismatches,
+  use measurement covariance. Table vs D1 with worsened cases.
+- [ ] DB3 Pose-quality behaviour: below a covariance threshold slow down and prefer routes near walls; hold
+  and re-localise if very low. Test with a scripted quality drop.
+- [ ] DB4 Baseline batch (10 layouts). GATE: mean drift < 1.0 m, coverage >= 90%, survivors >= 90%,
+  home_error < 1 m, collision_events ~0. If it fails after 2 rounds, say so with evidence.
 
 ---------------------------------------------------------------------------------------------------
-## PHASE E — Gazebo + RViz integration
+## PHASE E — Gazebo + RViz integration (for the profile(s) I choose at Checkpoint D3)
 
-The first three tasks are headless. The RViz task needs me to look at the screen.
+The first tasks are headless. The RViz task needs me to look at the screen.
 
-- [ ] E1 `timeout 60 gz sim -s -r maps/house_00042.sdf > generated_maps/e1.log 2>&1; echo "exit=$?"`
+- [ ] E1 World loads
+  DO: `timeout 60 gz sim -s -r maps/house_00042.sdf > generated_maps/e1.log 2>&1; echo "exit=$?"`
   DONE WHEN: the log shows the world loaded with no plugin errors (list any warnings).
 
-- [ ] E2 Bridge: write the ros_gz_bridge config (IMU, ranges, camera, cmd_vel, clock).
-  CHECK: with the world running, `ros2 topic list` shows the bridged topics.
+- [ ] E2 Drone model with sensors
+  DO: create a drone model (SDF) with: IMU, 5 range sensors (narrow-cone gpu_lidar, matching the
+  simulated sonars), a 360-degree gpu_lidar (matching the D3 parameters), and two cameras (front, down).
+  Add it to the world at the start cell from the JSON. Sensor noise parameters must match config/sensors.yaml.
+  DONE WHEN: `gz topic -l` lists all sensor topics.
 
-- [ ] E3 Node: backends/gazebo_ros2 node runs the core stack on Gazebo topics and publishes
-  /map, /odom, /drone/path, /survivors, /mission/state (check with `ros2 topic echo --once`).
+- [ ] E3 Bridge
+  DO: ros_gz_bridge config for IMU, ranges, scan, both camera images, camera info, cmd_vel, clock.
+  CHECK: `ros2 topic list` shows /imu/data, /range/*, /scan, /camera/front/image_raw, /camera/down/image_raw.
 
-- [ ] E4 Launch file: `ros2 launch airmouse mission.launch.py map:=<name>` starts Gazebo, bridge, node,
-  and RViz with maps/rescue_mapping.rviz. Write the exact commands in README.
+- [ ] E4 Node
+  DO: backends/gazebo_ros2 node runs the same core stack through the HAL on those topics and publishes
+  /map, /odom, /drone/path, /drone/plan, /survivors, /camera/image_annotated, /mission/state, TF
+  map -> odom -> base_link -> sensor frames.
+  CHECK: `ros2 topic echo --once` on each.
 
-- [ ] E5 Consistency: assert in a test that the survivor world coordinates in the JSON equal those in the
-  SDF for 5 generated layouts.
+- [ ] E5 Launch file
+  DO: `ros2 launch airmouse mission.launch.py map:=<name> profile:=<profile>` starts Gazebo, bridge, node and
+  RViz with maps/rescue_mapping.rviz. Add LaserScan and both Image displays to the RViz config. Write the
+  exact commands in README.
 
-- [ ] E6 HUMAN CHECK: ask me to run the launch and send a screenshot of RViz. Do not claim it works
-  without it.
+- [ ] E6 Consistency test
+  DO: a test that the survivor world coordinates in the JSON equal those in the SDF for 5 generated layouts,
+  and that the drone start pose matches.
+  DONE WHEN: test passes.
+
+- [ ] E7 HUMAN CHECK: ask me to run the launch and send a screenshot of RViz and Gazebo. Do not claim it
+  works without it.
 
 CHECKPOINT E.
 
 ---------------------------------------------------------------------------------------------------
 ## PHASE F — Hardening and final report
 
-- [ ] F1 Failsafe tests: pose-quality loss, sensor timeout, imminent collision, low battery.
-- [ ] F2 Loop-rate profile (target >= 10 Hz autonomy loop); list the slowest 3 functions.
-- [ ] F3 Hardware abstraction stubs: MPU6050 (I2C), HC-SR04 x5, camera, MAVLink — interfaces only,
-  documented in README.
-- [ ] F4 Final 20-layout report (10 house + 10 maze, estimated pose) in docs/FINAL_REPORT.md: table,
-  mean/worst, what passes, what does not, and remaining risks.
-- [ ] F5 README final: install, run (pygame, Gazebo, RViz), add a layout, move to the companion computer.
+- [ ] F1 Failsafe tests: pose-quality loss, sensor timeout (including lidar and camera loss), imminent
+  collision, low battery, memory file corruption (load must fail safely).
+- [ ] F2 Loop-rate profile (target >= 10 Hz autonomy loop); list the slowest 3 functions and the combined
+  cost of lidar scan matching plus feature tracking plus YOLO.
+- [ ] F3 Hardware abstraction stubs: MPU6050 (I2C), HC-SR04 x5, 2D lidar (serial), two cameras, MAVLink —
+  interfaces only, documented in README.
+- [ ] F4 Final 20-layout report (10 house + 10 maze, estimated pose, chosen profile) in
+  docs/FINAL_REPORT.md: table, mean/worst, what passes, what does not, remaining risks.
+- [ ] F5 README final: install, run (pygame, Gazebo, RViz), add a layout, switch profile, move to the
+  companion computer.
 
 CHECKPOINT F — final report.
