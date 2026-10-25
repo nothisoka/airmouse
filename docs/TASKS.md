@@ -177,7 +177,7 @@ CHECKPOINT B — stop and report the table with worsened cases.
 ---------------------------------------------------------------------------------------------------
 ## PHASE C — Survivors (true pose first)
 
-- [ ] C1 Survivors in every table (if A5 did not already): survivors_found/total and false_positives.
+- [x] C1 Survivors in every table (if A5 did not already): survivors_found/total and false_positives.
 
 - [ ] C2 Detection check on simulated camera frames
   DO: write tools/check_yolo.py: run a headless mission, save 10 camera frames in which a person is in
