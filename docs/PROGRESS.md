@@ -621,6 +621,11 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   ```
 - **DONE WHEN:** Detection rate on frames containing a person is 100.0% (10/10), exceeding the 80% threshold with high confidence (0.745 - 0.873); all 29 unit tests pass.
 
+### Task C3: Improve person visibility (only if detection rate < 80%)
+- **DO:** Evaluated need for renderer adjustments based on Task C2 results.
+- **CHECK:** Task C2 empirical check yielded a detection rate of **100.0% (10/10)** with confidence scores between 0.745 and 0.873 across distances from 1.80m to 4.55m and varied viewing angles.
+- **DONE WHEN:** The condition for renderer changes ("only if detection rate < 80%") is not triggered because detection rate is 100.0% ($\ge 80\%$), confirming person sprite and camera synthesis visibility are already optimal; all 29 unit tests pass.
+
 
 
 

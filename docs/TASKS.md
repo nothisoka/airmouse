@@ -185,7 +185,7 @@ CHECKPOINT B — stop and report the table with worsened cases.
   detections and confidence. If YOLO cannot load, say so (do not fake).
   DONE WHEN: script output pasted: detection rate on frames that contain a person.
 
-- [ ] C3 Improve person visibility (only if detection rate < 80%)
+- [x] C3 Improve person visibility (only if detection rate < 80%)
   DO: change ONLY the backend renderer: person size, contrast, textured body, shadow. Re-run C2.
   DONE WHEN: detection rate >= 80% on the test frames, or documented why not.
 
