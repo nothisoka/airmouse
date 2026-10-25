@@ -259,13 +259,30 @@ class MissionCoordinator:
                 if self.no_frontier_count < 10:
                     return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.6)
                 else:
-                    # Genuinely exhausted frontiers: exploration completed!
-                    print(f"[RTH TRIGGER] Return-home triggered: no reachable frontiers remaining at t={elapsed:.1f}s.")
-                    if not self.end_cause or self.end_cause == "UNKNOWN":
-                        self.end_cause = "NO_REACHABLE_FRONTIERS (10 consecutive search failures)"
-                    self.state = MissionState.RETURN_HOME
-                    self._plan_return_home(drone_state)
-                    return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
+                    # Check if all frontier clusters are genuinely exhausted
+                    remaining_clusters = self.frontier_detector.count_remaining_clusters(self.grid_map)
+                    if remaining_clusters == 0:
+                        # Genuinely exhausted frontiers: exploration completed!
+                        print(f"[RTH TRIGGER] Return-home triggered: 0 frontier clusters remaining at t={elapsed:.1f}s.")
+                        if not self.end_cause or self.end_cause == "UNKNOWN":
+                            self.end_cause = "EXPLORATION_FINISHED (0 clusters remaining)"
+                        self.state = MissionState.RETURN_HOME
+                        self._plan_return_home(drone_state)
+                        return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
+                    else:
+                        # Frontier clusters remain! Clear failure counts and backtrack along breadcrumbs
+                        self.frontier_detector.blacklist_counts.clear()
+                        self.no_frontier_count = 0
+                        if len(self.breadcrumbs) > 1:
+                            prev_crumb = self.breadcrumbs[-2]
+                            backtrack_path = self.planner.plan(self.grid_map, drone_xy, prev_crumb, allow_unknown=True)
+                            if backtrack_path:
+                                self.current_path = backtrack_path
+                                self.current_target = prev_crumb
+                                if len(self.breadcrumbs) > 2:
+                                    self.breadcrumbs.pop()
+                                return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
+                        return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.6)
 
             # Record safe traversed breadcrumbs
             drone_xy = (float(drone_state.position[0]), float(drone_state.position[1]))
@@ -331,7 +348,7 @@ class MissionCoordinator:
     def _plan_next_frontier(self, state: DroneState):
         self.replan_count += 1
         drone_xy = (float(state.position[0]), float(state.position[1]))
-        candidates = self.frontier_detector.find_candidate_frontiers(self.grid_map, drone_xy, top_k=5)
+        candidates = self.frontier_detector.find_candidate_frontiers(self.grid_map, drone_xy, top_k=15)
         for frontier in candidates:
             # Oscillation watchdog: if alternating between same two goals 3 times
             if len(self.recent_goals) >= 4:

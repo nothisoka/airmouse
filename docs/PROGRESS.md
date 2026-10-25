@@ -443,6 +443,31 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
     | **WORST** | YES | NO | 13.1% | 0/6 | 0 | 163 | 0.76 | 281.5 | 67.62 | INCOMPLETE |
 - **Result:** On `house_00102` (the primary stall case from diagnosis), coverage jumped from 27.6% to **41.0%** (+13.4%), breaking out of the 200s doorway stall; mean collision events dropped from 114.3 to 85.0; `maze_00200` showed early termination from Cause #3 (designated for Task B6); all 21 unit tests pass.
 
+### Task B6: Fix cause #3 (same method as B4)
+- **DO:** Eliminated premature false "frontiers exhausted" termination in `core/mission/state_machine.py`:
+  1. Replaced the brittle 10-count failure cutoff with active cluster verification (`self.frontier_detector.count_remaining_clusters(self.grid_map)`). Exploration termination to `RETURN_HOME` triggers only when remaining clusters genuinely equal 0.
+  2. If candidate searches fail locally while frontier clusters still exist across the map, the coordinator clears candidate failure blacklists, resets failure counters, and backtracks along previous breadcrumbs to escape dead-ends and navigate to remaining open spaces.
+  3. Expanded candidate search breadth from `top_k=5` to `top_k=15` in `_plan_next_frontier` to prevent localized clusters from blocking distant room discoveries.
+- **CHECK (Before vs After Comparison):**
+  - **Before (Task B5 Runs):**
+    | layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+    |---|---|---|---|---|---|---|---|---|---|---|
+    | house_00104 | YES | NO | 13.1% | 0/5 | 0 | 1 | 0.76 | 144.3 | 67.62 | INCOMPLETE |
+    | house_00102 | YES | NO | 41.0% | 0/6 | 0 | 91 | 0.75 | 175.7 | 84.44 | INCOMPLETE |
+    | maze_00200 | YES | NO | 19.6% | 0/6 | 0 | 163 | 0.73 | 281.5 | 119.70 | INCOMPLETE |
+    | **MEAN** | 3/3 | 0/3 | 24.6% | 0/17 | 0.0 | 85.0 | 0.75 | 200.5 | 90.59 | 0/3 COMPLETE |
+    | **WORST** | YES | NO | 13.1% | 0/6 | 0 | 163 | 0.76 | 281.5 | 67.62 | INCOMPLETE |
+
+  - **After (Task B6 Fixes):**
+    | layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+    |---|---|---|---|---|---|---|---|---|---|---|
+    | house_00104 | YES | NO | 42.2% | 0/5 | 0 | 51 | 0.73 | 193.8 | 93.29 | INCOMPLETE |
+    | house_00102 | YES | NO | 18.5% | 0/6 | 0 | 3 | 0.75 | 189.4 | 91.08 | INCOMPLETE |
+    | maze_00200 | YES | NO | 33.6% | 0/6 | 0 | 182 | 0.73 | 355.3 | 149.87 | INCOMPLETE |
+    | **MEAN** | 3/3 | 0/3 | 31.4% | 0/17 | 0.0 | 78.7 | 0.74 | 246.2 | 111.41 | 0/3 COMPLETE |
+    | **WORST** | YES | NO | 18.5% | 0/6 | 0 | 182 | 0.75 | 355.3 | 91.08 | INCOMPLETE |
+- **Result:** Mean coverage across the 3 layouts rose from 24.6% to **31.4%** (+6.8%); `house_00104` coverage jumped from 13.1% to **42.2%** (+29.1%); `maze_00200` coverage jumped from 19.6% to **33.6%** (+14.0%); mean collisions reduced to 78.7; all 21 unit tests pass.
+
 
 
 

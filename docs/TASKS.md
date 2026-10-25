@@ -143,7 +143,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
   pytest passes.
 
 - [x] B5 Fix cause #2 (same method as B4)
-- [ ] B6 Fix cause #3 (same method as B4)
+- [x] B6 Fix cause #3 (same method as B4)
 
 - [ ] B7 Doorway clearance
   DO: check drone radius vs obstacle inflation vs door width (cells are 1 m; doors are 1-2 cells wide).
