@@ -481,6 +481,20 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   - `pytest -q`: 24 passed in 4.78s.
 - **DONE WHEN:** All tests pass, verifying path clearance and narrow door rejection.
 
+### Task B8: Stall / oscillation watchdog
+- **DO:**
+  1. Implemented position stall watchdog in `core/mission/state_machine.py`: tracks stall anchor position and timestamp; if drone remains within 0.5m for $\ge 15.0$s, current target is reported as failure/blacklisted and replanned.
+  2. Implemented goal oscillation watchdog in `core/mission/state_machine.py`: tracks recent goal history; if candidate selection alternates between the same two candidate targets 3 times, blacklists the oscillating target and forces discovery of alternative frontiers.
+  3. Created unit test suite `tests/test_watchdog.py`:
+     - `test_scripted_stall_watchdog`: verifies 15s position lock triggers target blacklisting and replan.
+     - `test_stall_watchdog_resets_on_motion`: verifies drone moving $>0.5$m resets the anchor and timer.
+     - `test_goal_oscillation_watchdog`: verifies 3-way alternating oscillation triggers blacklist and log notification.
+- **CHECK:**
+  - `pytest -q tests/test_watchdog.py`: 3 passed in 3.94s.
+  - `pytest -q`: 27 passed in 4.93s.
+  - Log audit: In open layouts (`house_00100`, `house_00101`, `house_00103`), stall watchdog does not fire as progress is steady. In constricted layouts (`house_00102`, `maze_00200`), goal oscillation triggers reliably on local boundary oscillations (e.g. `[WATCHDOG] Goal oscillation detected: alternated between goals 3 times. Blacklisting (7.38, 10.62)`), breaking deadlocks without stalling.
+- **DONE WHEN:** All tests pass; watchdog firing semantics verified in test suite and procedural run logs.
+
 
 
 

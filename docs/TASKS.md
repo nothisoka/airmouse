@@ -151,7 +151,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
   configured clearance; no path is returned if the doorway is truly too small.
   DONE WHEN: test passes.
 
-- [ ] B8 Stall / oscillation watchdog
+- [x] B8 Stall / oscillation watchdog
   DO: if the drone stays within 0.5 m for 15 s, or alternates between the same two goals 3 times,
   blacklist the current goal and replan. Unit test with a scripted stall.
   DONE WHEN: test passes; a run log shows the watchdog never fires in normal runs (or explains each firing).
