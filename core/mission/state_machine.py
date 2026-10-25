@@ -85,6 +85,12 @@ class MissionCoordinator:
         self.last_rth_check_time = -1.0
         self.cached_path_len_home = -1.0
 
+        # Diagnostic tracking
+        self.replan_count: int = 0
+        self.state_time_spent: Dict[MissionState, float] = {s: 0.0 for s in MissionState}
+        self.last_update_time: Optional[float] = None
+        self.end_cause: str = "UNKNOWN"
+
     @staticmethod
     def should_trigger_return_home(
         remaining_time_s: float,
@@ -141,6 +147,12 @@ class MissionCoordinator:
         ranges: dict,
     ) -> VelocityCommand:
         """Run one step of the mission state machine and return velocity command."""
+        if self.last_update_time is not None:
+            dt = current_time_s - self.last_update_time
+            if dt > 0:
+                self.state_time_spent[self.state] += dt
+        self.last_update_time = current_time_s
+
         battery = self.flight.get_battery_percentage()
         elapsed = current_time_s - self.start_time if self.start_time >= 0.0 else 0.0
 
@@ -163,6 +175,8 @@ class MissionCoordinator:
 
             if battery <= self.low_battery_pct:
                 print(f"[RTH TRIGGER] Return-home triggered by low battery ({battery:.1f}%) at t={elapsed:.1f}s.")
+                if not self.end_cause or self.end_cause == "UNKNOWN":
+                    self.end_cause = f"LOW_BATTERY ({battery:.1f}%)"
                 self.state = MissionState.RETURN_HOME
                 self._plan_return_home(drone_state)
             elif should_trigger:
@@ -171,11 +185,15 @@ class MissionCoordinator:
                     f"(remaining={remaining_time:.1f}s, est_home={est_time_home:.1f}s, "
                     f"margin={required_margin:.1f}s, path_len={self.cached_path_len_home:.2f}m)"
                 )
+                if not self.end_cause or self.end_cause == "UNKNOWN":
+                    self.end_cause = f"BUDGET_EXHAUSTED (rem={remaining_time:.1f}s, req={required_margin:.1f}s)"
                 self.state = MissionState.RETURN_HOME
                 self._plan_return_home(drone_state)
             elif drone_state.quality == PoseQuality.CRITICAL:
                 # High uncertainty: slow down and return home
                 print(f"[RTH TRIGGER] Return-home triggered due to CRITICAL pose quality at t={elapsed:.1f}s.")
+                if not self.end_cause or self.end_cause == "UNKNOWN":
+                    self.end_cause = "CRITICAL_POSE_QUALITY"
                 self.state = MissionState.RETURN_HOME
                 self._plan_return_home(drone_state)
 
@@ -217,6 +235,9 @@ class MissionCoordinator:
                     return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.6)
                 else:
                     # Genuinely exhausted frontiers: exploration completed!
+                    print(f"[RTH TRIGGER] Return-home triggered: no reachable frontiers remaining at t={elapsed:.1f}s.")
+                    if not self.end_cause or self.end_cause == "UNKNOWN":
+                        self.end_cause = "NO_REACHABLE_FRONTIERS (10 consecutive search failures)"
                     self.state = MissionState.RETURN_HOME
                     self._plan_return_home(drone_state)
                     return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
@@ -283,6 +304,7 @@ class MissionCoordinator:
         return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
 
     def _plan_next_frontier(self, state: DroneState):
+        self.replan_count += 1
         drone_xy = (float(state.position[0]), float(state.position[1]))
         candidates = self.frontier_detector.find_candidate_frontiers(self.grid_map, drone_xy, top_k=5)
         for frontier in candidates:

@@ -382,6 +382,19 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   ```
 - **Result:** Dynamic return-home trigger verified in unit tests and simulation run logs; all 21 unit tests pass.
 
+### Task B3: Diagnose coverage (NO fixes)
+- **DO:** Added temporary diagnostic instrumentation to `core/mission/state_machine.py` and `run.py` tracking:
+  - Simulation time, room coverage %, physical velocity speed over time (logged every 10s via `[DIAG ...]`)
+  - Replans executed and blacklisted frontier goals count
+  - Time spent per state (`TAKEOFF`, `EXPLORE`, `RETURN_HOME`, `LAND`, `COMPLETE`)
+  - End cause and termination triggers
+  - Ran 3 representative layouts with `POSE_MODE=true`: `house_00104`, `house_00102`, and `maze_00200` without changing any system autonomy behavior.
+- **CHECK:** Authored `docs/diagnosis_B.md` analyzing the telemetry runs and ranking the top 3 causes of low coverage with empirical evidence:
+  1. **Rank 1: Doorway & Narrow Passage Inaccessibility:** Obstacle inflation of 0.40m encroaches by 0.80m into 1.0m openings, leaving 0.20m clearance (narrower than 0.25m cell resolution). A* Planner lethal cost blocks valid paths; `maze_00200` logged 130 blacklisted goals across 266 failures leaving 37 clusters unvisited; `house_00102` left 27 clusters unvisited with 17 blacklisted goals.
+  2. **Rank 2: Goal Oscillation and Stalling Near Openings Without a Watchdog:** `house_00102` suffered a complete 200-second stagnation plateau (t=80s to t=280s at 27.1% coverage) with speed repeatedly collapsing to 0.00 m/s and over 100 replans in place, with no watchdog detecting the stall.
+  3. **Rank 3: Premature Exploration Termination / False "Frontiers Exhausted" Heuristic:** State machine's brittle 10-failure counter (`no_frontier_count >= 10`) triggered premature exploration completion after localized doorway blockage in `house_00104` (A9: ended at 170.7s at 10.4% coverage with 89.6% unexplored).
+- **Result:** `docs/diagnosis_B.md` created with empirical evidence for all three causes; no behavior changes made; all 21 unit tests pass.
+
 
 
 

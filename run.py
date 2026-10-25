@@ -321,6 +321,17 @@ def run_pygame_sim(
                   f"Cov: {cov_p:4.1f}% | "
                   f"Survivors: {len(mission.tracker.confirmed_survivors)}/6")
 
+        # Diagnostic logging every 10 seconds (Task B3)
+        if step_count % 1000 == 0:  # every 10.0 simulation seconds
+            cov_p = compute_true_room_coverage(true_grid, grid_map, metadata.cell_size_m)
+            speed_xy = float(np.linalg.norm(true_phys.velocity[:2]))
+            blacklisted = sum(1 for v in mission.frontier_detector.blacklist_counts.values() if v >= mission.frontier_detector.blacklist_max_attempts)
+            print(f"[DIAG t={sim_time:5.1f}s] State: {mission.state.name:<11} | "
+                  f"Cov: {cov_p:4.1f}% | "
+                  f"Speed: {speed_xy:4.2f}m/s | "
+                  f"Replans: {mission.replan_count:3d} | "
+                  f"Blacklisted: {blacklisted:2d}")
+
         # Step 4d: Autonomy Mission Coordinator Update
         drone_state = ekf.get_state(sim_time)
         true_phys = drone.get_state()
@@ -424,6 +435,19 @@ def run_pygame_sim(
     print(f"Collision Events:            {metrics.collision_events}")
     print(f"Frontier Clusters Remaining: {metrics.frontier_clusters_remaining}")
     print("======================================================\n")
+
+    blacklisted_count = sum(1 for v in mission.frontier_detector.blacklist_counts.values() if v >= mission.frontier_detector.blacklist_max_attempts)
+    print("=================== DIAGNOSTIC REPORT ===================")
+    print(f"End Cause:                   {mission.end_cause or exit_reason}")
+    print(f"Exit Reason:                 {metrics.exit_reason}")
+    print(f"Final Coverage:              {metrics.coverage_pct:.1f}%")
+    print(f"Total Replans:               {mission.replan_count}")
+    print(f"Blacklisted Goals:           {blacklisted_count} (total failures: {len(mission.frontier_detector.blacklist_counts)})")
+    print(f"Time in State:")
+    for st, t_s in mission.state_time_spent.items():
+        if t_s > 0.05:
+            print(f"  {st.name:<15}: {t_s:5.1f} s")
+    print("=========================================================\n")
 
     return metrics
 

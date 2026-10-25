@@ -130,7 +130,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
   planned path length home / cruise speed. Log the trigger time and the margin.
   DONE WHEN: unit test (synthetic numbers) passes; one run log shows the trigger line.
 
-- [ ] B3 Diagnose coverage (NO fixes)
+- [x] B3 Diagnose coverage (NO fixes)
   DO: on 3 layouts with POSE_MODE=true, add temporary debug logging if needed: why the mission ended,
   coverage over time (every 10 s), speed over time, number of replans, number of blacklisted goals,
   time spent per state. Write docs/diagnosis_B.md ranking the top 3 causes of low coverage with
