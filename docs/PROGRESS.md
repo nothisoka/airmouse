@@ -735,6 +735,39 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   - **Pytest:** 43 passed in 5.39s.
 - **Result:** Task C7 complete; reached CHECKPOINT C.
 
+### Task D1: Baseline re-measure (NO code changes)
+- **DO:** Executed baseline benchmark suite with `POSE_MODE=estimated` and `PROFILE=baseline` across 5 house and 5 maze layouts (`scripts/run_batch.sh 100 5 house` and `scripts/run_batch.sh 200 5 maze`). Saved resulting tables to `docs/baselines/D1_baseline_house.md` and `docs/baselines/D1_baseline_maze.md`.
+- **CHECK (Batch Run Tables):**
+
+#### House Batch (`POSE_MODE=estimated PROFILE=baseline scripts/run_batch.sh 100 5 house`)
+| layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+|---|---|---|---|---|---|---|---|---|---|---|
+| house_00100 | YES | NO | 7.3% | 0/4 | 3 | 647 | 10.29 | 220.0 | 84.45 | TIMEOUT |
+| house_00101 | YES | NO | 13.9% | 0/2 | 2 | 275 | 18.20 | 220.0 | 110.23 | TIMEOUT |
+| house_00102 | YES | NO | 5.6% | 0/6 | 2 | 838 | 9.21 | 220.0 | 95.61 | TIMEOUT |
+| house_00103 | YES | NO | 8.0% | 0/2 | 0 | 805 | 17.01 | 220.0 | 96.97 | TIMEOUT |
+| house_00104 | YES | NO | 19.3% | 0/5 | 6 | 174 | 8.01 | 220.0 | 111.34 | TIMEOUT |
+| **MEAN** | 5/5 | 0/5 | 10.8% | 0/19 | 2.6 | 547.8 | 12.54 | 220.0 | 99.72 | 0/5 COMPLETE |
+| **WORST** | YES | NO | 5.6% | 0/6 | 6 | 838 | 18.20 | 220.0 | 84.45 | TIMEOUT |
+
+#### Maze Batch (`POSE_MODE=estimated PROFILE=baseline scripts/run_batch.sh 200 5 maze`)
+| layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+|---|---|---|---|---|---|---|---|---|---|---|
+| maze_00200 | YES | NO | 16.8% | 0/6 | 0 | 507 | 3.19 | 220.0 | 94.48 | TIMEOUT |
+| maze_00201 | YES | NO | 2.8% | 0/1 | 0 | 1037 | 2.27 | 220.0 | 87.78 | TIMEOUT |
+| maze_00202 | YES | NO | 20.2% | 0/6 | 0 | 378 | 1.73 | 220.0 | 105.59 | TIMEOUT |
+| maze_00203 | YES | NO | 13.1% | 0/5 | 0 | 500 | 1.40 | 220.0 | 98.94 | TIMEOUT |
+| maze_00204 | YES | NO | 2.1% | 0/6 | 5 | 825 | 6.26 | 220.0 | 79.99 | TIMEOUT |
+| **MEAN** | 5/5 | 0/5 | 11.0% | 0/24 | 1.0 | 649.4 | 2.97 | 220.0 | 93.36 | 0/5 COMPLETE |
+| **WORST** | YES | NO | 2.1% | 0/6 | 5 | 1037 | 6.26 | 220.0 | 79.99 | TIMEOUT |
+
+- **Observations:**
+  - In estimated pose mode without external corrections, dead-reckoning horizontal drift accumulates to $12.54\text{ m}$ in house and $2.97\text{ m}$ in maze layouts.
+  - Due to position estimation drift, the perceived home location diverges from physical launch coordinates, resulting in home error $> 1\text{ m}$ and timeouts during return-to-home attempts.
+  - These baseline numbers provide the quantitative reference for evaluating the sensor profiles and estimation improvements in Phase D.
+- **DONE WHEN:** Both `docs/baselines/D1_baseline_house.md` and `docs/baselines/D1_baseline_maze.md` exist and are committed.
+
+
 
 
 

@@ -223,7 +223,7 @@ Always POSE_MODE=estimated in this phase. The goal is to measure what each senso
 
 ### D-I  Foundations
 
-- [ ] D1 Baseline re-measure (NO code changes)
+- [x] D1 Baseline re-measure (NO code changes)
   DO: with the Phase B/C system, PROFILE=baseline (the only profile that exists yet), POSE_MODE=estimated:
   `scripts/run_batch.sh 100 5 house` and `scripts/run_batch.sh 200 5 maze`. Save to
   docs/baselines/D1_baseline_house.md and D1_baseline_maze.md.
