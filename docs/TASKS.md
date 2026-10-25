@@ -179,7 +179,7 @@ CHECKPOINT B — stop and report the table with worsened cases.
 
 - [x] C1 Survivors in every table (if A5 did not already): survivors_found/total and false_positives.
 
-- [ ] C2 Detection check on simulated camera frames
+- [x] C2 Detection check on simulated camera frames
   DO: write tools/check_yolo.py: run a headless mission, save 10 camera frames in which a person is in
   view to generated_maps/frames/, run YOLO (weights path from config) on them, print per-frame
   detections and confidence. If YOLO cannot load, say so (do not fake).
