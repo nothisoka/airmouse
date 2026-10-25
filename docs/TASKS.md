@@ -125,7 +125,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
   CHECK: change the yaml value and show that a run log prints the new limit.
   DONE WHEN: the check passes; pytest passes.
 
-- [ ] B2 Smarter return-home trigger
+- [x] B2 Smarter return-home trigger
   DO: trigger return-home when remaining_time < est_time_home * 1.5 + 30 s, where est_time_home =
   planned path length home / cruise speed. Log the trigger time and the margin.
   DONE WHEN: unit test (synthetic numbers) passes; one run log shows the trigger line.

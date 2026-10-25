@@ -369,6 +369,19 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   Restored standard defaults (`600.0s` planned budget, `660.0s` hard limit, `0.60 m/s` cruise speed, `0.30` RTH margin).
 - **Result:** Parameters dynamically loaded and verified; all 18 unit tests pass.
 
+### Task B2: Smarter return-home trigger
+- **DO:** Implemented path-budget return-home trigger in `core/mission/state_machine.py`. Replaced fixed percentage threshold with dynamic check: `remaining_time < est_time_home * 1.5 + 30.0 s`, where `est_time_home = planned path length home / cruise speed`. Logged trigger time, remaining time, est_time_home, margin, and path length.
+- **CHECK (Unit Tests):** Added `tests/test_rth_trigger.py` testing synthetic numbers against boundary conditions and state machine transitions:
+  - Synthetic test 1: `path_len = 30.0m`, `speed = 0.6 m/s` -> `est_time = 50.0s`, `margin = 105.0s`. At `remaining = 120.0s` -> `False`; at `remaining = 104.9s` -> `True`.
+  - Synthetic test 2: `path_len = 0.0m` edge case -> `margin = 30.0s`. At `remaining = 31.0s` -> `False`; at `remaining = 29.0s` -> `True`.
+  - Integration transition: verifies `MissionCoordinator` transitions from `EXPLORE` to `RETURN_HOME` when remaining budget drops below dynamic margin.
+  - All 21 tests pass in pytest suite.
+- **CHECK (Run Log):** Executed simulation test (`scripts/run_headless.sh maps/house_00042.json b2_rth_test --max-time 20`), run log `generated_maps/run_b2_rth_test.log` captures:
+  ```text
+  [RTH TRIGGER] Return-home triggered at t=3.6s (remaining=16.4s, est_home=0.7s, margin=31.0s, path_len=0.42m)
+  ```
+- **Result:** Dynamic return-home trigger verified in unit tests and simulation run logs; all 21 unit tests pass.
+
 
 
 

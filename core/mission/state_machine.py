@@ -63,7 +63,7 @@ class MissionCoordinator:
         self.return_home_margin = float(return_home_margin if return_home_margin is not None else cfg.get("return_home_margin", 0.30))
 
         self.state = MissionState.PREFLIGHT
-        self.start_time = 0.0
+        self.start_time = -1.0
 
         # Subsystems
         self.planner = AStarPlanner()
@@ -81,6 +81,59 @@ class MissionCoordinator:
         self.breadcrumbs: List[Tuple[float, float]] = [self.start_world]
         self.last_breadcrumb_pos: Tuple[float, float] = self.start_world
 
+        # Smarter return-home cache
+        self.last_rth_check_time = -1.0
+        self.cached_path_len_home = -1.0
+
+    @staticmethod
+    def should_trigger_return_home(
+        remaining_time_s: float,
+        path_length_home_m: float,
+        cruise_speed_mps: float,
+        margin_multiplier: float = 1.5,
+        fixed_margin_s: float = 30.0,
+    ) -> Tuple[bool, float, float]:
+        """
+        Evaluate smarter return-home trigger:
+        trigger when remaining_time < est_time_home * 1.5 + 30 s
+        where est_time_home = path_length_home / cruise_speed.
+        Returns: (should_trigger, est_time_home, required_margin)
+        """
+        speed = max(0.01, cruise_speed_mps)
+        est_time_home = path_length_home_m / speed
+        required_margin = est_time_home * margin_multiplier + fixed_margin_s
+        should_trigger = remaining_time_s < required_margin
+        return should_trigger, est_time_home, required_margin
+
+    @staticmethod
+    def compute_path_length(
+        path: List[Tuple[float, float]],
+        start_pos: Optional[Tuple[float, float]] = None,
+    ) -> float:
+        if not path:
+            return 0.0
+        pts = list(path)
+        if start_pos is not None and (pts[0][0] != start_pos[0] or pts[0][1] != start_pos[1]):
+            pts = [start_pos] + pts
+        total = 0.0
+        for p1, p2 in zip(pts[:-1], pts[1:]):
+            total += math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+        return total
+
+    def get_planned_path_home(self, state: DroneState) -> List[Tuple[float, float]]:
+        drone_xy = (float(state.position[0]), float(state.position[1]))
+        # First try planning strictly through KNOWN FREE space (never through unmapped walls)
+        path = self.planner.plan(self.grid_map, drone_xy, self.start_world, allow_unknown=False)
+        if path and len(path) >= 2:
+            return path
+        # Fallback to reverse traversed breadcrumbs (guaranteed collision-free verified path)
+        if self.breadcrumbs:
+            dists = [math.hypot(b[0] - drone_xy[0], b[1] - drone_xy[1]) for b in self.breadcrumbs]
+            closest_idx = int(np.argmin(dists))
+            rev_crumbs = list(reversed(self.breadcrumbs[:closest_idx + 1]))
+            return rev_crumbs + [self.start_world]
+        return [drone_xy, self.start_world]
+
     def update(
         self,
         current_time_s: float,
@@ -89,18 +142,40 @@ class MissionCoordinator:
     ) -> VelocityCommand:
         """Run one step of the mission state machine and return velocity command."""
         battery = self.flight.get_battery_percentage()
-        elapsed = current_time_s - self.start_time if self.start_time > 0 else 0.0
+        elapsed = current_time_s - self.start_time if self.start_time >= 0.0 else 0.0
 
         # Global failsafe checks during flight
         if self.state == MissionState.EXPLORE:
-            # Reserve return_home_margin of battery/time budget for return-to-home navigation and landing
-            margin_fraction = self.return_home_margin if self.return_home_margin <= 0.5 else (1.0 - self.return_home_margin)
-            rth_trigger_time = self.max_flight_time * (1.0 - margin_fraction)
-            if battery <= self.low_battery_pct or elapsed >= rth_trigger_time:
+            remaining_time = max(0.0, self.max_flight_time - elapsed)
+
+            # Update path home length estimate periodically (every 1.0s) or if uninitialized
+            if current_time_s - self.last_rth_check_time >= 1.0 or self.cached_path_len_home < 0.0:
+                self.last_rth_check_time = current_time_s
+                path_home = self.get_planned_path_home(drone_state)
+                drone_xy = (float(drone_state.position[0]), float(drone_state.position[1]))
+                self.cached_path_len_home = self.compute_path_length(path_home, start_pos=drone_xy)
+
+            should_trigger, est_time_home, required_margin = self.should_trigger_return_home(
+                remaining_time_s=remaining_time,
+                path_length_home_m=self.cached_path_len_home,
+                cruise_speed_mps=self.cruise_speed,
+            )
+
+            if battery <= self.low_battery_pct:
+                print(f"[RTH TRIGGER] Return-home triggered by low battery ({battery:.1f}%) at t={elapsed:.1f}s.")
+                self.state = MissionState.RETURN_HOME
+                self._plan_return_home(drone_state)
+            elif should_trigger:
+                print(
+                    f"[RTH TRIGGER] Return-home triggered at t={elapsed:.1f}s "
+                    f"(remaining={remaining_time:.1f}s, est_home={est_time_home:.1f}s, "
+                    f"margin={required_margin:.1f}s, path_len={self.cached_path_len_home:.2f}m)"
+                )
                 self.state = MissionState.RETURN_HOME
                 self._plan_return_home(drone_state)
             elif drone_state.quality == PoseQuality.CRITICAL:
                 # High uncertainty: slow down and return home
+                print(f"[RTH TRIGGER] Return-home triggered due to CRITICAL pose quality at t={elapsed:.1f}s.")
                 self.state = MissionState.RETURN_HOME
                 self._plan_return_home(drone_state)
 
@@ -222,17 +297,6 @@ class MissionCoordinator:
         self.current_path = []
 
     def _plan_return_home(self, state: DroneState):
-        drone_xy = (float(state.position[0]), float(state.position[1]))
-        # First try planning strictly through KNOWN FREE space (never through unmapped walls)
-        path = self.planner.plan(self.grid_map, drone_xy, self.start_world, allow_unknown=False)
-        if path and len(path) >= 2:
-            self.current_path = path
-        else:
-            # Fallback to reverse traversed breadcrumbs (guaranteed collision-free verified path)
-            if self.breadcrumbs:
-                dists = [math.hypot(b[0] - drone_xy[0], b[1] - drone_xy[1]) for b in self.breadcrumbs]
-                closest_idx = int(np.argmin(dists))
-                rev_crumbs = list(reversed(self.breadcrumbs[:closest_idx + 1]))
-                self.current_path = rev_crumbs + [self.start_world]
-            else:
-                self.current_path = [self.start_world]
+        self.current_path = self.get_planned_path_home(state)
+        if self.current_path and len(self.current_path) >= 1:
+            self.current_target = self.current_path[0]
