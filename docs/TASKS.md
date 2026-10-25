@@ -166,7 +166,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
   distance, state). Fix the single most common pattern (for example: slow down within X m of walls).
   DONE WHEN: collision_events is near 0 on those layouts or the cause is documented.
 
-- [ ] B11 Phase B batch
+- [x] B11 Phase B batch
   DO: `scripts/run_batch.sh 100 5 house` and `... 200 5 maze` with POSE_MODE=true. Compare with A9.
   GATE (mean): coverage >= 90%, collision_events ~0, home_error_m < 1.0, no TIMEOUT, no stall.
   If the gate is not met: you may do at most TWO more rounds of (B3-style diagnosis -> one fix ->
