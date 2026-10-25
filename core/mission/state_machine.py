@@ -91,6 +91,11 @@ class MissionCoordinator:
         self.last_update_time: Optional[float] = None
         self.end_cause: str = "UNKNOWN"
 
+        # Stall & oscillation watchdog (Cause #2 / Task B8)
+        self.stall_anchor_pos: Optional[Tuple[float, float]] = None
+        self.stall_start_time: float = -1.0
+        self.recent_goals: List[Tuple[float, float]] = []
+
     @staticmethod
     def should_trigger_return_home(
         remaining_time_s: float,
@@ -217,6 +222,26 @@ class MissionCoordinator:
                 self._plan_return_home(drone_state)
                 return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
 
+            # Stall watchdog: if drone stays within 0.5m for >= 15.0s, blacklist current goal and replan
+            drone_xy = (float(drone_state.position[0]), float(drone_state.position[1]))
+            if self.stall_anchor_pos is None:
+                self.stall_anchor_pos = drone_xy
+                self.stall_start_time = current_time_s
+            else:
+                dist_from_anchor = math.hypot(drone_xy[0] - self.stall_anchor_pos[0], drone_xy[1] - self.stall_anchor_pos[1])
+                if dist_from_anchor > 0.5:
+                    self.stall_anchor_pos = drone_xy
+                    self.stall_start_time = current_time_s
+                elif self.stall_start_time >= 0.0 and (current_time_s - self.stall_start_time >= 15.0):
+                    print(f"[WATCHDOG] Stall detected: stayed within 0.5m for {current_time_s - self.stall_start_time:.1f}s at ({drone_xy[0]:.2f}, {drone_xy[1]:.2f}). Blacklisting goal and replanning.")
+                    if self.current_target:
+                        self.frontier_detector.report_failure(self.current_target, self.grid_map)
+                    self.current_path = []
+                    self.current_target = None
+                    self.stall_anchor_pos = drone_xy
+                    self.stall_start_time = current_time_s
+                    self._plan_next_frontier(drone_state)
+
             # Replan periodically or when path is empty (gated by minimum replan cooldown)
             should_replan = (current_time_s - self.last_replan_time >= self.replan_interval) or (
                 not self.current_path and current_time_s - self.last_replan_time >= 0.5
@@ -308,10 +333,24 @@ class MissionCoordinator:
         drone_xy = (float(state.position[0]), float(state.position[1]))
         candidates = self.frontier_detector.find_candidate_frontiers(self.grid_map, drone_xy, top_k=5)
         for frontier in candidates:
+            # Oscillation watchdog: if alternating between same two goals 3 times
+            if len(self.recent_goals) >= 4:
+                d_alt1 = math.hypot(frontier[0] - self.recent_goals[-2][0], frontier[1] - self.recent_goals[-2][1])
+                d_alt2 = math.hypot(self.recent_goals[-1][0] - self.recent_goals[-3][0], self.recent_goals[-1][1] - self.recent_goals[-3][1])
+                if d_alt1 < 0.5 and d_alt2 < 0.5:
+                    alt_count = sum(1 for g in self.recent_goals if math.hypot(frontier[0] - g[0], frontier[1] - g[1]) < 0.5)
+                    if alt_count >= 2:
+                        print(f"[WATCHDOG] Goal oscillation detected: alternated between goals 3 times. Blacklisting ({frontier[0]:.2f}, {frontier[1]:.2f}).")
+                        self.frontier_detector.report_failure(frontier, self.grid_map)
+                        continue
+
             path = self.planner.plan(self.grid_map, drone_xy, frontier, allow_unknown=True)
             if path:
                 self.current_target = frontier
                 self.current_path = path
+                self.recent_goals.append(frontier)
+                if len(self.recent_goals) > 10:
+                    self.recent_goals.pop(0)
                 return
             else:
                 self.frontier_detector.report_failure(frontier, self.grid_map)

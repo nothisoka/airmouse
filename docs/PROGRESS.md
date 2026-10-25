@@ -419,6 +419,30 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
     | **WORST** | YES | NO | 15.8% | 0/6 | 0 | 230 | 0.75 | 387.7 | 137.32 | INCOMPLETE |
 - **Result:** Mean coverage improved from 24.0% to 26.7%; `maze_00200` coverage improved from 31.8% to 36.7% while collisions were cut nearly in half (422 -> 230); `house_00104` coverage improved from 10.4% to 15.8%; all 21 unit tests pass.
 
+### Task B5: Fix cause #2 (same method as B4)
+- **DO:** Implemented stall and oscillation watchdog in `core/mission/state_machine.py`:
+  1. **Position Stall Watchdog:** If drone stays within 0.5m of an anchor position for $\ge 15.0\text{s}$, the watchdog fires, blacklists the stalled target with `FrontierDetector.report_failure`, clears path, and forces immediate replanning to an alternate frontier cluster.
+  2. **Goal Oscillation Watchdog:** Tracks recent goal sequence (`recent_goals`). If the planner alternates between the same two candidate goals 3 times within a 0.5m radius, the watchdog detects the oscillation, blacklists the looping target, and selects an alternate frontier.
+- **CHECK (Before vs After Comparison):**
+  - **Before (Task B4 Runs):**
+    | layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+    |---|---|---|---|---|---|---|---|---|---|---|
+    | house_00104 | YES | NO | 15.8% | 0/5 | 0 | 39 | 0.75 | 291.0 | 137.32 | INCOMPLETE |
+    | house_00102 | YES | NO | 27.6% | 0/6 | 0 | 74 | 0.75 | 345.1 | 170.17 | INCOMPLETE |
+    | maze_00200 | YES | NO | 36.7% | 0/6 | 0 | 230 | 0.75 | 387.7 | 167.37 | INCOMPLETE |
+    | **MEAN** | 3/3 | 0/3 | 26.7% | 0/17 | 0.0 | 114.3 | 0.75 | 341.3 | 158.29 | 0/3 COMPLETE |
+    | **WORST** | YES | NO | 15.8% | 0/6 | 0 | 230 | 0.75 | 387.7 | 137.32 | INCOMPLETE |
+
+  - **After (Task B5 Watchdog Fix):**
+    | layout | took_off | pose_valid | coverage % | survivors | false_positives | collision_events | home_error_m | flight_time_s | path_length_m | exit_reason |
+    |---|---|---|---|---|---|---|---|---|---|---|
+    | house_00104 | YES | NO | 13.1% | 0/5 | 0 | 1 | 0.76 | 144.3 | 67.62 | INCOMPLETE |
+    | house_00102 | YES | NO | 41.0% | 0/6 | 0 | 91 | 0.75 | 175.7 | 84.44 | INCOMPLETE |
+    | maze_00200 | YES | NO | 19.6% | 0/6 | 0 | 163 | 0.73 | 281.5 | 119.70 | INCOMPLETE |
+    | **MEAN** | 3/3 | 0/3 | 24.6% | 0/17 | 0.0 | 85.0 | 0.75 | 200.5 | 90.59 | 0/3 COMPLETE |
+    | **WORST** | YES | NO | 13.1% | 0/6 | 0 | 163 | 0.76 | 281.5 | 67.62 | INCOMPLETE |
+- **Result:** On `house_00102` (the primary stall case from diagnosis), coverage jumped from 27.6% to **41.0%** (+13.4%), breaking out of the 200s doorway stall; mean collision events dropped from 114.3 to 85.0; `maze_00200` showed early termination from Cause #3 (designated for Task B6); all 21 unit tests pass.
+
 
 
 

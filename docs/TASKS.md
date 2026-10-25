@@ -142,7 +142,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
   DONE WHEN: coverage on those 3 layouts improved or the cause is shown not to apply (record why);
   pytest passes.
 
-- [ ] B5 Fix cause #2 (same method as B4)
+- [x] B5 Fix cause #2 (same method as B4)
 - [ ] B6 Fix cause #3 (same method as B4)
 
 - [ ] B7 Doorway clearance
