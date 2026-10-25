@@ -18,6 +18,7 @@ import numpy as np
 from airmouse.core.hal import ImuData, RangeData, CameraFrame, DroneState, PoseQuality
 from airmouse.core.estimation.altitude_filter import AltitudeFilter
 from airmouse.core.estimation.visual_odometry import VisualOdometry
+from airmouse.core.estimation.scan_matcher import ScanMatchResult
 
 
 def euler_to_quat(roll: float, pitch: float, yaw: float) -> np.ndarray:
@@ -66,6 +67,10 @@ class SensorFusionEKF:
         # Stationary preflight gyroscope bias calibration buffer
         self.calibrated = False
         self.calib_gyro_samples: list[np.ndarray] = []
+
+        # Lidar scan match state tracking
+        self.last_lidar_match_time = -1.0
+        self.last_lidar_match_pos: Optional[np.ndarray] = None
 
     def predict(self, imu: ImuData):
         # Auto-calibrate gyroscope bias during initial stationary/takeoff phase
@@ -327,6 +332,93 @@ class SensorFusionEKF:
         IKH = I_15 - K @ H
         self.P = IKH @ self.P @ IKH.T + K @ R @ K.T
         self.P = 0.5 * (self.P + self.P.T)
+
+    def update_lidar_match(
+        self,
+        match_result: ScanMatchResult,
+        timestamp_s: Optional[float] = None,
+        min_score: float = 0.65,
+    ) -> bool:
+        """Fuse 2D planar lidar scan matching pose into the 15-state EKF.
+
+        Measurement z = [x_meas, y_meas, yaw_meas]^T
+        Covariance R = match_result.cov (3x3)
+        Gated by score, validity flag, and Mahalanobis distance.
+        """
+        if not match_result.valid or match_result.score < min_score:
+            return False
+
+        z = np.array([
+            match_result.matched_x,
+            match_result.matched_y,
+            match_result.matched_yaw,
+        ], dtype=np.float64)
+
+        # Measurement matrix H (3x15): maps [x, y, yaw]
+        H = np.zeros((3, 15), dtype=np.float64)
+        H[0, 0] = 1.0  # x
+        H[1, 1] = 1.0  # y
+        H[2, 8] = 1.0  # yaw
+
+        # Innovation with wrapped yaw
+        innov = np.zeros(3, dtype=np.float64)
+        innov[0] = z[0] - self.x[0]
+        innov[1] = z[1] - self.x[1]
+        innov[2] = (z[2] - self.x[8] + math.pi) % (2.0 * math.pi) - math.pi
+
+        # Measurement noise covariance R with small diagonal floor
+        R = match_result.cov.copy()
+        R[0, 0] += 0.005 ** 2
+        R[1, 1] += 0.005 ** 2
+        R[2, 2] += math.radians(0.2) ** 2
+
+        # Innovation covariance S = H P H^T + R
+        S = H @ self.P @ H.T + R
+        try:
+            S_inv = np.linalg.inv(S)
+        except np.linalg.LinAlgError:
+            return False
+
+        # Outlier gating: reject implausible single-step jumps (> 0.60 m or > 25 deg)
+        if np.linalg.norm(innov[:2]) > 0.60 or abs(innov[2]) > math.radians(25.0):
+            return False
+
+        # Kalman gain (15x3)
+        K = self.P @ H.T @ S_inv
+
+        # State update
+        dx = K @ innov
+        self.x += dx
+        self.x[8] = (self.x[8] + math.pi) % (2.0 * math.pi) - math.pi
+
+        # Joseph form covariance update
+        I_15 = np.eye(15, dtype=np.float64)
+        IKH = I_15 - K @ H
+        self.P = IKH @ self.P @ IKH.T + K @ R @ K.T
+        self.P = 0.5 * (self.P + self.P.T)
+
+        # Velocity and accelerometer bias tracking from smooth position corrections
+        if timestamp_s is not None and timestamp_s > 0:
+            if self.last_lidar_match_time > 0:
+                dt = timestamp_s - self.last_lidar_match_time
+                if 0.04 < dt < 0.5 and self.last_lidar_match_pos is not None:
+                    meas_vel = (z[:2] - self.last_lidar_match_pos) / dt
+                    v_innov = meas_vel - self.x[3:5]
+                    # Smoothly update horizontal velocity
+                    self.x[3] += 0.35 * v_innov[0]
+                    self.x[4] += 0.35 * v_innov[1]
+                    # Update horizontal accelerometer bias in body frame
+                    yaw = self.x[8]
+                    cy, sy = math.cos(yaw), math.sin(yaw)
+                    ba_world_x = 0.01 * v_innov[0]
+                    ba_world_y = 0.01 * v_innov[1]
+                    self.x[9] -= (ba_world_x * cy + ba_world_y * sy)
+                    self.x[10] -= (-ba_world_x * sy + ba_world_y * cy)
+
+            self.last_lidar_match_time = timestamp_s
+            self.last_lidar_match_pos = z[:2].copy()
+
+        return True
 
     def _raycast_map(self, x0: float, y0: float, angle: float, grid_map, max_d: float = 4.0):
         cos_a = math.cos(angle)

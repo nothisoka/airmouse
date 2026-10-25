@@ -32,6 +32,7 @@ except ImportError:
 from airmouse.core.mapping.map_io import load_map_file, cell_to_world
 from airmouse.core.mapping.occupancy_grid import OccupancyGrid
 from airmouse.core.estimation.ekf import SensorFusionEKF
+from airmouse.core.estimation.scan_matcher import ScanMatcher
 from airmouse.core.perception.yolo_detector import YoloDetector
 from airmouse.core.perception.ray_projector import GroundRayProjector
 from airmouse.core.mission.state_machine import MissionCoordinator, MissionState
@@ -207,6 +208,7 @@ def run_pygame_sim(
 
     # 3. Initialize Pure Autonomy Stack (Zero Ground Truth Access)
     ekf = SensorFusionEKF(init_pos=init_drone_pos, init_yaw=0.0)
+    scan_matcher = ScanMatcher() if sensor_hub.has_sensor("lidar2d") else None
     grid_map = OccupancyGrid(
         width_m=metadata.cols * metadata.cell_size_m,
         height_m=metadata.rows * metadata.cell_size_m,
@@ -363,6 +365,17 @@ def run_pygame_sim(
             scan = lidar.read()
             if scan is not None:
                 drone_state = ekf.get_state(sim_time)
+                # In estimated pose mode, match scan to existing map and update EKF
+                if not debug_true_pose and scan_matcher is not None:
+                    match_res = scan_matcher.match(
+                        scan=scan,
+                        grid_map=grid_map,
+                        initial_pose=(drone_state.position[0], drone_state.position[1], drone_state.attitude_rpy[2]),
+                    )
+                    if match_res.valid:
+                        ekf.update_lidar_match(match_res, timestamp_s=sim_time)
+                        drone_state = ekf.get_state(sim_time)
+
                 true_phys = drone.get_state()
                 active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
                 grid_map.update_lidar_scan(

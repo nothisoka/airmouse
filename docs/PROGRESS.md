@@ -861,6 +861,39 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   - Full test suite: 56 passed in 30.95s.
 - **DONE WHEN:** Both tests pass; test suite passed.
 
+### Task D6: Fuse scan matching into the EKF
+- **DO:**
+  1. In `core/estimation/ekf.py`, implemented `update_lidar_match(match_result, timestamp_s, min_score)`:
+     - Gated by match validity and score threshold (`min_score = 0.65`).
+     - Measurement vector $z = [x_{\text{meas}}, y_{\text{meas}}, \psi_{\text{meas}}]^T$.
+     - Measurement Jacobian $H$ ($3 \times 15$) mapping state $[x, y, \dots, \text{yaw}]$.
+     - Measurement noise covariance $R = \text{cov} + \text{diag}([0.005^2, 0.005^2, \text{rad}(0.2)^2])$.
+     - Innovation outlier gating: rejects implausible single-step jumps ($> 0.60\text{ m}$ or $> 25^\circ$).
+     - Kalman gain $K = P H^T S^{-1}$ and Joseph-form covariance update $P \gets (I - KH)P(I - KH)^T + KRK^T$.
+     - Velocity and horizontal accelerometer bias compensation derived from smooth position corrections over inter-scan intervals.
+  2. In `run.py`, integrated scan matcher into Step 4d:
+     - When lidar is present and in estimated pose mode, matches incoming 8 Hz scan against online occupancy grid using current EKF pose estimate.
+     - Fuses valid match into EKF prior to mapping, then updates grid map with corrected estimated pose, preventing drift feedback into the map.
+  3. Added unit tests in `tests/test_ekf_lidar_fusion.py`:
+     - Synthetic test: 20 m straight flight at 1.0 m/s with injected IMU accelerometer bias ($0.06\text{ m/s}^2$) and gyro bias ($0.005\text{ rad/s}$).
+     - Low score / invalid match gating test.
+- **CHECK Output:**
+  ```text
+  tests/test_ekf_lidar_fusion.py::test_ekf_lidar_fusion_straight_20m_flight_with_bias PASSED [ 50%]
+  tests/test_ekf_lidar_fusion.py::test_ekf_lidar_fusion_rejects_low_score PASSED [100%]
+  2 passed in 26.39s
+  ```
+  - Drift without matcher: **`20.000 m`** (well above 0.3 m requirement).
+  - Max drift with matcher: **`0.173 m`** (well below 0.3 m threshold).
+  - Final drift with matcher: **`0.012 m`**.
+  - Zero-ground-truth check: `pytest -q tests/test_zero_ground_truth.py` PASSED (1 passed).
+  - Regression check: `PROFILE=baseline scripts/run_headless.sh maps/house_00042.json d6_regress --max-time 10 --hard-limit 15` completed without crashing.
+  - Full profile test: `PROFILE=full scripts/run_headless.sh maps/house_00042.json d6_full_test --max-time 10 --hard-limit 15` completed without crashing.
+  - Full test suite: 58 passed in 36.39s.
+- **DONE WHEN:** Synthetic test passed; full test suite passed.
+
+
+
 
 
 

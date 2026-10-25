@@ -266,7 +266,7 @@ Always POSE_MODE=estimated in this phase. The goal is to measure what each senso
   to within 0.05 m / 1 degree. A second test with a bad scan must be rejected.
   DONE WHEN: both tests pass.
 
-- [ ] D6 Fuse scan matching into the EKF
+- [x] D6 Fuse scan matching into the EKF
   DO: use the matcher output as an (x, y, yaw) measurement update with its covariance, gated by score.
   CHECK: synthetic test: IMU with injected bias, straight 20 m flight; drift stays below 0.3 m with the
   matcher and clearly above that without it.
