@@ -145,7 +145,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
 - [x] B5 Fix cause #2 (same method as B4)
 - [x] B6 Fix cause #3 (same method as B4)
 
-- [ ] B7 Doorway clearance
+- [x] B7 Doorway clearance
   DO: check drone radius vs obstacle inflation vs door width (cells are 1 m; doors are 1-2 cells wide).
   Add a unit test: planner finds a path through a 1-cell doorway and the planned path keeps the
   configured clearance; no path is returned if the doorway is truly too small.

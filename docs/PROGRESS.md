@@ -468,6 +468,19 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
     | **WORST** | YES | NO | 18.5% | 0/6 | 0 | 182 | 0.75 | 355.3 | 91.08 | INCOMPLETE |
 - **Result:** Mean coverage across the 3 layouts rose from 24.6% to **31.4%** (+6.8%); `house_00104` coverage jumped from 13.1% to **42.2%** (+29.1%); `maze_00200` coverage jumped from 19.6% to **33.6%** (+14.0%); mean collisions reduced to 78.7; all 21 unit tests pass.
 
+### Task B7: Doorway clearance
+- **DO:**
+  1. Verified geometrical relationships between drone collision radius ($r = 0.20$ m), lethal obstacle clearance ($0.22$ m), soft inflation safety buffer ($0.30$ m), and standard doorway widths (1 cell = 1.0 m, 2 cells = 2.0 m; 4 to 8 cells at grid resolution $0.25$ m).
+  2. Aligned `config/mapping.yaml` inflation parameters (`robot_radius_m: 0.20`, `safety_margin_m: 0.10`, `inflation_radius_m: 0.30`).
+  3. Added comprehensive test suite `tests/test_doorway_clearance.py` covering:
+     - Geometrical and physical clearance invariants ($r_{\text{drone}} \le \text{lethal} \le \text{inflation} < \text{door half-width}$).
+     - Planner successfully plans through a 1-cell (1.0m) doorway while strictly keeping $\ge 0.20$ m clearance from wall obstacles along all waypoints.
+     - Planner returns empty path when a doorway is narrower than the drone diameter (< 0.40m).
+- **CHECK:**
+  - `pytest -q tests/test_doorway_clearance.py`: 3 passed in 0.42s.
+  - `pytest -q`: 24 passed in 4.78s.
+- **DONE WHEN:** All tests pass, verifying path clearance and narrow door rejection.
+
 
 
 

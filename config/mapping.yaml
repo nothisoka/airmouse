@@ -19,7 +19,7 @@ occupancy_grid:
     beam_samples_across_cone: 5
 
   inflation:
-    robot_radius_m: 0.25
-    safety_margin_m: 0.15
-    inflation_radius_m: 0.40   # combined safety buffer around obstacles
+    robot_radius_m: 0.20
+    safety_margin_m: 0.10
+    inflation_radius_m: 0.30   # combined safety buffer around obstacles (allows 1-cell doorway clearance)
 
