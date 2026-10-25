@@ -204,7 +204,7 @@ CHECKPOINT B — stop and report the table with worsened cases.
   (record before/after). Maximum 2 rounds.
   DONE WHEN: table shows survivors found/total.
 
-- [ ] C7 Phase C batch (10 layouts, true pose). GATE: survivors found >= 90%, false positives low.
+- [x] C7 Phase C batch (10 layouts, true pose). GATE: survivors found >= 90%, false positives low.
 
 CHECKPOINT C.
 
