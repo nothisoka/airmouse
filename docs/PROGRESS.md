@@ -643,6 +643,25 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   ```
 - **DONE WHEN:** Ground localization error is $< 0.5$ m on all 10 test cases (measured error $\le 0.0001$ m across all test configurations); all 39 unit tests pass in pytest suite.
 
+### Task C5: Tracker rules
+- **DO:** Updated `SurvivorTracker` in `core/perception/survivor_tracker.py` and `config/mission.yaml`:
+  1. **Confirmation count:** Set default `confirmation_count: int = 3` (tracks require $N \ge 3$ consistent detections before confirmation).
+  2. **Distance gating / deduplication:** Configured `gate_distance_m: float = 1.0` (merges all detections within 1.0 m of an existing track).
+  3. **Capacity cap:** Enforced strict ceiling of `max_survivors: int = 6` on `confirmed_survivors`.
+  4. **Wall rejection:** Integrated `grid_map` checking (`is_occupied(gx, gy)`); any projected ground detection lying inside an occupied wall cell is immediately discarded.
+  5. Wired `MissionCoordinator` and `run.py` to pass active `grid_map` into tracker updates.
+  6. Extended `tests/test_perception_dedupe.py` with 4 new tests verifying $N=3$ confirmation, 1.0m gating boundaries, 6-survivor capping, and wall detection rejection.
+- **CHECK:**
+  ```text
+  tests/test_perception_dedupe.py::test_ray_projection PASSED
+  tests/test_perception_dedupe.py::test_survivor_dedupe PASSED
+  tests/test_perception_dedupe.py::test_confirmation_requires_n3_consistent_detections PASSED
+  tests/test_perception_dedupe.py::test_dedupe_within_1m PASSED
+  tests/test_perception_dedupe.py::test_cap_at_6_survivors PASSED
+  tests/test_perception_dedupe.py::test_ignore_detections_inside_walls PASSED
+  ```
+- **DONE WHEN:** All tracker rule unit tests pass; all 43 unit tests pass across the codebase.
+
 
 
 

@@ -194,7 +194,7 @@ CHECKPOINT B — stop and report the table with worsened cases.
   synthetic boxes at known positions.
   DONE WHEN: error < 0.5 m on all test cases.
 
-- [ ] C5 Tracker rules
+- [x] C5 Tracker rules
   DO: confirm a survivor after N=3 consistent detections, dedupe within 1.0 m, cap at 6, ignore detections
   inside walls. Extend the existing dedupe tests.
   DONE WHEN: tests pass.

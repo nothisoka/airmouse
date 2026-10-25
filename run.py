@@ -312,7 +312,7 @@ def run_pygame_sim(
                         drone_roll=active_pose.attitude_rpy[0],
                     )
                     if ground_coords is not None:
-                        mission.tracker.update(ground_coords, det.confidence)
+                        mission.tracker.update(ground_coords, det.confidence, grid_map=grid_map)
 
         # Periodic status logging in terminal
         true_phys = drone.get_state()

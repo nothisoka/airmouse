@@ -30,5 +30,5 @@ perception:
   target_class: "person"
   confidence_threshold: 0.25
   confirmation_frames: 3       # must be seen in 3 distinct frames
-  dedupe_distance_gate_m: 1.2  # detections within 1.2m merged to same survivor
+  dedupe_distance_gate_m: 1.0  # detections within 1.0m merged to same survivor
 

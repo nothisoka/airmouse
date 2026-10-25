@@ -72,7 +72,7 @@ class MissionCoordinator:
         self.frontier_detector = FrontierDetector(min_cluster_size=self.frontier_min_cluster_size)
         self.controller = WaypointController(max_vel_xy=self.cruise_speed)
         self.avoidance = ReactiveAvoidance()
-        self.tracker = SurvivorTracker()
+        self.tracker = SurvivorTracker(grid_map=self.grid_map)
 
         # Path tracking
         self.current_path: List[Tuple[float, float]] = []
