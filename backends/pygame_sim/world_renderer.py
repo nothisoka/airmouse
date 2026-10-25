@@ -192,7 +192,7 @@ class WorldRenderer:
         u = int(self.cx + (self.fx * x_cam) / z_cam)
         v = int(self.cy + (self.fy * y_cam) / z_cam)
 
-        if -50 <= u <= self.w + 50 and -50 <= v <= self.h + 50:
+        if -150 <= u <= self.w + 150 and -150 <= v <= self.h + 150:
             return (u, v)
         return None
 

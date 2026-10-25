@@ -116,9 +116,11 @@ def test_ignore_detections_inside_walls():
     grid_map = OccupancyGrid(width_m=20.0, height_m=20.0, resolution_m=0.25)
     tracker = SurvivorTracker(gate_distance_m=1.0, confirmation_count=3, max_survivors=6, grid_map=grid_map)
 
-    # Mark a wall at (4.5, 4.5)
+    # Mark a 1.0m wall block centered at (4.5, 4.5)
     wall_gx, wall_gy = grid_map.world_to_grid(4.5, 4.5)
-    grid_map.log_odds[wall_gy, wall_gx] = 5.0  # high log-odds -> p > 0.99
+    for dgx in range(-1, 2):
+        for dgy in range(-1, 2):
+            grid_map.log_odds[wall_gy + dgy, wall_gx + dgx] = 5.0  # high log-odds -> p > 0.99
 
     assert grid_map.is_occupied(wall_gx, wall_gy)
 

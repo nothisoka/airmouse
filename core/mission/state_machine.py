@@ -323,6 +323,22 @@ class MissionCoordinator:
                 self.state = MissionState.LAND
                 return VelocityCommand(vx=0.0, vy=0.0, vz=-0.4, yaw_rate_radps=0.0)
 
+            # RTH stall watchdog: replan if drone is stuck making no progress along return path
+            drone_xy = (float(drone_state.position[0]), float(drone_state.position[1]))
+            if self.stall_anchor_pos is None:
+                self.stall_anchor_pos = drone_xy
+                self.stall_start_time = current_time_s
+            else:
+                dist_from_anchor = math.hypot(drone_xy[0] - self.stall_anchor_pos[0], drone_xy[1] - self.stall_anchor_pos[1])
+                if dist_from_anchor > 0.4:
+                    self.stall_anchor_pos = drone_xy
+                    self.stall_start_time = current_time_s
+                elif self.stall_start_time >= 0.0 and (current_time_s - self.stall_start_time >= 5.0):
+                    self.current_path = []
+                    self.stall_anchor_pos = drone_xy
+                    self.stall_start_time = current_time_s
+                    self._plan_return_home(drone_state)
+
             # Plan path home if not already following one
             if not self.current_path:
                 self._plan_return_home(drone_state)

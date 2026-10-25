@@ -52,6 +52,9 @@ class YoloDetector:
             return
         try:
             self.model = YOLO(self.weights_path)
+            # Warm up model to eliminate initialization latency during flight
+            dummy = np.zeros((240, 320, 3), dtype=np.uint8)
+            self.model.predict(dummy, imgsz=320, conf=self.conf_thresh, verbose=False)
             self.status = f"YOLO ready ({Path(self.weights_path).name})"
         except Exception as e:
             self.status = f"YOLO load error: {str(e)[:40]}"

@@ -14,6 +14,7 @@ class SurvivorTrack:
     detection_count: int
     positions: List[Tuple[float, float]] = field(default_factory=list)
     confidences: List[float] = field(default_factory=list)
+    last_seen_time: float = 0.0
 
     @property
     def estimated_pos(self) -> Tuple[float, float]:
@@ -46,6 +47,7 @@ class SurvivorTracker:
         projected_ground_pos: Tuple[float, float],
         confidence: float,
         grid_map: Optional[Any] = None,
+        timestamp_s: float = 0.0,
     ):
         """Update tracker with a projected ground contact detection."""
         wx, wy = projected_ground_pos
@@ -56,7 +58,16 @@ class SurvivorTracker:
             if hasattr(active_grid, "is_occupied") and hasattr(active_grid, "world_to_grid"):
                 gx, gy = active_grid.world_to_grid(wx, wy)
                 if active_grid.in_bounds(gx, gy) and active_grid.is_occupied(gx, gy):
-                    return  # Ignore detections inside walls
+                    # Check if directly adjacent to open floor space (person standing near wall)
+                    snapped = False
+                    for dgx, dgy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                        ngx, ngy = gx + dgx, gy + dgy
+                        if active_grid.in_bounds(ngx, ngy) and not active_grid.is_occupied(ngx, ngy):
+                            wx, wy = active_grid.grid_to_world(ngx, ngy)
+                            snapped = True
+                            break
+                    if not snapped:
+                        return  # Truly inside wall obstacle, ignore
             elif hasattr(active_grid, "is_wall"):
                 if active_grid.is_wall(wx, wy):
                     return
@@ -82,6 +93,7 @@ class SurvivorTracker:
             best_track.positions.append((wx, wy))
             best_track.confidences.append(confidence)
             best_track.detection_count += 1
+            best_track.last_seen_time = timestamp_s
             if not best_track.confirmed and best_track.detection_count >= self.confirm_count:
                 if len(self.confirmed_survivors) < self.max_survivors:
                     best_track.confirmed = True
@@ -97,6 +109,7 @@ class SurvivorTracker:
                     detection_count=1,
                     positions=[(wx, wy)],
                     confidences=[confidence],
+                    last_seen_time=timestamp_s,
                 )
                 self._next_id += 1
                 self.tracks.append(new_track)

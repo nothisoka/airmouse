@@ -36,6 +36,7 @@ mkdir -p generated_maps
 "$PYTHON" generate_maps.py --mode "$MODE" --seed "$START_SEED" --count "$COUNT" --out generated_maps > /dev/null 2>&1
 
 export POSE_MODE
+export ENABLE_YOLO="${ENABLE_YOLO:-true}"
 
 # Run headless sequentially on each layout and print markdown table with MEAN / WORST rows
 "$PYTHON" - "$START_SEED" "$COUNT" "$MODE" "$POSE_MODE" << 'EOF'

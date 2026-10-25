@@ -35,6 +35,8 @@ if [ "${ENABLE_YOLO:-}" != "true" ]; then
     EXTRA_ARGS+=(--no-yolo)
 fi
 
+rm -f "$METRICS_JSON"
+
 # Run the simulation headless under timeout 300
 timeout 300 "$PYTHON" run.py \
     --map "$MAP_PATH" \

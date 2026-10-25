@@ -215,7 +215,7 @@ class SimulatedSensorHub(SensorHub):
         """Raymarch against grid cells to find nearest obstacle distance."""
         cos_a = math.cos(angle)
         sin_a = math.sin(angle)
-        step = 0.05
+        step = 0.12
         d = 0.0
         while d < max_dist:
             d += step

@@ -97,7 +97,12 @@ class OccupancyGrid:
             gx, gy = self.world_to_grid(wx, wy)
             if not self.in_bounds(gx, gy):
                 break
-            self.log_odds[gy, gx] = np.clip(self.log_odds[gy, gx] + self.l_free, self.l_min, self.l_max)
+            nval = self.log_odds[gy, gx] + self.l_free
+            if nval < self.l_min:
+                nval = self.l_min
+            elif nval > self.l_max:
+                nval = self.l_max
+            self.log_odds[gy, gx] = nval
             dist += step
 
         # Occupied hit cell at beam end (only if valid reflection)
@@ -106,7 +111,12 @@ class OccupancyGrid:
             hit_wy = y0_w + range_m * sin_a
             gx, gy = self.world_to_grid(hit_wx, hit_wy)
             if self.in_bounds(gx, gy):
-                self.log_odds[gy, gx] = np.clip(self.log_odds[gy, gx] + self.l_occ, self.l_min, self.l_max)
+                nval = self.log_odds[gy, gx] + self.l_occ
+                if nval < self.l_min:
+                    nval = self.l_min
+                elif nval > self.l_max:
+                    nval = self.l_max
+                self.log_odds[gy, gx] = nval
 
     def get_probability(self, gx: int, gy: int) -> float:
         if not self.in_bounds(gx, gy):

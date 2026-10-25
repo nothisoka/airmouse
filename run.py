@@ -15,6 +15,9 @@ import math
 import random
 import sys
 import time
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(line_buffering=True)
 from pathlib import Path
 from typing import Optional
 import numpy as np
@@ -179,6 +182,7 @@ def run_pygame_sim(
         renderer=renderer,
         grid=true_grid,
         cell_size_m=metadata.cell_size_m,
+        camera_rate_hz=2.0,
     )
     flight = SimulatedFlightInterface(drone=drone)
     viewer = PygameViewer(
@@ -195,6 +199,7 @@ def run_pygame_sim(
         resolution_m=0.25,
     )
     yolo = YoloDetector() if enable_yolo else None
+    print(f"Perception subsystem: enable_yolo={enable_yolo}, yolo={yolo is not None}, status={getattr(yolo, 'status', 'None')}")
     ray_projector = GroundRayProjector()
     mission = MissionCoordinator(
         start_world=(start_wx, start_wy),
@@ -219,6 +224,7 @@ def run_pygame_sim(
     wall_dist_map = cv2.distanceTransform((true_grid == 0).astype(np.uint8), cv2.DIST_L2, 5) * metadata.cell_size_m
 
     step_count = 0
+    last_yolo_time = -1.0
     exit_reason = "COMPLETE"
     while running and mission.state != MissionState.COMPLETE:
         # Check GUI events
@@ -267,7 +273,7 @@ def run_pygame_sim(
             ekf.update_sonar(ranges)
             drone_state = ekf.get_state(sim_time)
             # Scan-to-map drift correction against established map walls before updating beams
-            if step_count % 10 == 0:
+            if not debug_true_pose and step_count % 10 == 0:
                 ekf.update_scan_to_map(ranges, grid_map)
                 drone_state = ekf.get_state(sim_time)
 
@@ -296,23 +302,45 @@ def run_pygame_sim(
             gyro_rates = imu.gyro_radps if imu is not None else np.zeros(3)
             ekf.update_camera(cam, gyro_rates)
 
-            # YOLO inference (run at ~5 Hz on CPU to meet real-time budget)
-            if yolo is not None and step_count % 20 == 0:
+            # Adaptive YOLO inference:
+            # Baseline: 1.0 Hz (1.0s period) during general exploration
+            # Burst: 2.0 Hz (0.50s period) for up to 2.0s when confirming recent unconfirmed tracks
+            recent_unconfirmed = any(
+                not t.confirmed and (sim_time - getattr(t, 'last_seen_time', 0.0) <= 2.0)
+                for t in mission.tracker.tracks
+            )
+            all_found = len(mission.tracker.confirmed_survivors) >= 6
+            yolo_period = 0.50 if recent_unconfirmed else 1.00
+            if yolo is not None and not all_found and (sim_time - last_yolo_time >= yolo_period - 1e-4):
+                last_yolo_time = sim_time
+                prev_confirmed_count = len(mission.tracker.confirmed_survivors)
                 latest_detections = yolo.detect(cam.image_bgr)
+                if latest_detections:
+                    print(f"[YOLO DETECT] t={sim_time:.1f}s: {len(latest_detections)} person detection(s).")
                 for det in latest_detections:
                     u_b, v_b = det.bottom_center
+                    # Adjust foot contact patch by +10% of box height
+                    v_ground = v_b + 0.10 * (det.y2 - det.y1)
                     true_phys = drone.get_state()
                     active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
                     ground_coords = ray_projector.project_pixel_to_ground(
                         pixel_u=u_b,
-                        pixel_v=v_b,
+                        pixel_v=v_ground,
                         drone_pos_world=active_pose.position,
                         drone_yaw=active_pose.attitude_rpy[2],
                         drone_pitch=active_pose.attitude_rpy[1],
                         drone_roll=active_pose.attitude_rpy[0],
                     )
                     if ground_coords is not None:
-                        mission.tracker.update(ground_coords, det.confidence, grid_map=grid_map)
+                        dist_proj = math.hypot(
+                            ground_coords[0] - active_pose.position[0],
+                            ground_coords[1] - active_pose.position[1],
+                        )
+                        if dist_proj <= 4.5:
+                            mission.tracker.update(ground_coords, det.confidence, grid_map=grid_map, timestamp_s=sim_time)
+                if len(mission.tracker.confirmed_survivors) > prev_confirmed_count:
+                    new_s = mission.tracker.confirmed_survivors[-1]
+                    print(f"[SURVIVOR CONFIRMED] Survivor #{new_s.id} confirmed at ({new_s.estimated_pos[0]:.2f}, {new_s.estimated_pos[1]:.2f}) at t={sim_time:.1f}s.")
 
         # Periodic status logging in terminal
         true_phys = drone.get_state()

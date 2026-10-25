@@ -199,7 +199,7 @@ CHECKPOINT B — stop and report the table with worsened cases.
   inside walls. Extend the existing dedupe tests.
   DONE WHEN: tests pass.
 
-- [ ] C6 End-to-end survivors, 5 layouts, POSE_MODE=true
+- [x] C6 End-to-end survivors, 5 layouts, POSE_MODE=true
   DO: run the batch; if survivors found < 90% or false positives > 0, fix ONE cause at a time
   (record before/after). Maximum 2 rounds.
   DONE WHEN: table shows survivors found/total.
