@@ -51,6 +51,7 @@ class MissionCoordinator:
         target_altitude_m: Optional[float] = None,
         cruise_speed_mps: Optional[float] = None,
         return_home_margin: Optional[float] = None,
+        frontier_min_cluster_size: Optional[int] = None,
     ):
         cfg = _get_default_mission_config()
         self.start_world = start_world
@@ -61,13 +62,14 @@ class MissionCoordinator:
         self.target_alt = float(target_altitude_m if target_altitude_m is not None else cfg.get("takeoff_altitude_m", 1.2))
         self.cruise_speed = float(cruise_speed_mps if cruise_speed_mps is not None else cfg.get("nominal_cruise_speed_mps", 0.6))
         self.return_home_margin = float(return_home_margin if return_home_margin is not None else cfg.get("return_home_margin", 0.30))
+        self.frontier_min_cluster_size = int(frontier_min_cluster_size if frontier_min_cluster_size is not None else cfg.get("frontier_min_cluster_size", 2))
 
         self.state = MissionState.PREFLIGHT
         self.start_time = -1.0
 
         # Subsystems
         self.planner = AStarPlanner()
-        self.frontier_detector = FrontierDetector()
+        self.frontier_detector = FrontierDetector(min_cluster_size=self.frontier_min_cluster_size)
         self.controller = WaypointController(max_vel_xy=self.cruise_speed)
         self.avoidance = ReactiveAvoidance()
         self.tracker = SurvivorTracker()
@@ -255,34 +257,45 @@ class MissionCoordinator:
                     self.no_frontier_count = 0
 
             if not self.current_path:
-                # If we recently started or have only tried a few replans, rotate slowly to scan the room with sonars
+                # Check if all frontier clusters are genuinely exhausted
+                remaining_clusters = self.frontier_detector.count_remaining_clusters(self.grid_map)
+                has_explored_space = (self.frontier_detector.total_frontiers_seen > 0) or (
+                    np.any(self.grid_map.log_odds < self.grid_map.l_free)
+                )
+
+                if remaining_clusters == 0 and (has_explored_space or self.no_frontier_count >= 10):
+                    # Genuinely exhausted frontiers: exploration completed!
+                    print(f"[RTH TRIGGER] Return-home triggered: 0 frontier clusters >= {self.frontier_min_cluster_size} remaining at t={elapsed:.1f}s.")
+                    if not self.end_cause or self.end_cause == "UNKNOWN":
+                        self.end_cause = f"EXPLORATION_FINISHED (0 clusters >= {self.frontier_min_cluster_size} remaining)"
+                    self.state = MissionState.RETURN_HOME
+                    self._plan_return_home(drone_state)
+                    return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
+
+                # If clusters exist but no immediate candidate found, rotate to scan with sonars
                 if self.no_frontier_count < 10:
                     return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.6)
                 else:
-                    # Check if all frontier clusters are genuinely exhausted
-                    remaining_clusters = self.frontier_detector.count_remaining_clusters(self.grid_map)
-                    if remaining_clusters == 0:
-                        # Genuinely exhausted frontiers: exploration completed!
-                        print(f"[RTH TRIGGER] Return-home triggered: 0 frontier clusters remaining at t={elapsed:.1f}s.")
-                        if not self.end_cause or self.end_cause == "UNKNOWN":
-                            self.end_cause = "EXPLORATION_FINISHED (0 clusters remaining)"
-                        self.state = MissionState.RETURN_HOME
-                        self._plan_return_home(drone_state)
-                        return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
-                    else:
-                        # Frontier clusters remain! Clear failure counts and backtrack along breadcrumbs
-                        self.frontier_detector.blacklist_counts.clear()
-                        self.no_frontier_count = 0
-                        if len(self.breadcrumbs) > 1:
-                            prev_crumb = self.breadcrumbs[-2]
-                            backtrack_path = self.planner.plan(self.grid_map, drone_xy, prev_crumb, allow_unknown=True)
-                            if backtrack_path:
-                                self.current_path = backtrack_path
-                                self.current_target = prev_crumb
-                                if len(self.breadcrumbs) > 2:
-                                    self.breadcrumbs.pop()
-                                return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
-                        return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.6)
+                    # Frontier clusters exist! Clear failure counts and backtrack along breadcrumbs
+                    self.frontier_detector.blacklist_counts.clear()
+                    self.no_frontier_count = 0
+                    if len(self.breadcrumbs) > 1:
+                        prev_crumb = self.breadcrumbs[-2]
+                        backtrack_path = self.planner.plan(self.grid_map, drone_xy, prev_crumb, allow_unknown=True)
+                        if backtrack_path:
+                            self.current_path = backtrack_path
+                            self.current_target = prev_crumb
+                            if len(self.breadcrumbs) > 2:
+                                self.breadcrumbs.pop()
+                            return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
+
+                    # Backtracked all the way to start and still no reachable clusters
+                    print(f"[RTH TRIGGER] Return-home triggered: no reachable frontier clusters remaining at t={elapsed:.1f}s.")
+                    if not self.end_cause or self.end_cause == "UNKNOWN":
+                        self.end_cause = "EXPLORATION_FINISHED (no reachable clusters remaining)"
+                    self.state = MissionState.RETURN_HOME
+                    self._plan_return_home(drone_state)
+                    return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
 
             # Record safe traversed breadcrumbs
             drone_xy = (float(drone_state.position[0]), float(drone_state.position[1]))

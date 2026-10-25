@@ -16,6 +16,7 @@ mission:
   max_cruise_speed_mps: 1.0
   max_yaw_rate_rads: 1.2
   return_home_margin: 0.30     # Fraction of time budget reserved for RTH (triggers at 70% elapsed)
+  frontier_min_cluster_size: 2 # Minimum connected frontier cells to consider a cluster target
 
   rth_criterion:
     all_survivors_found: true

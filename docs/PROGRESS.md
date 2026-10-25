@@ -495,6 +495,18 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   - Log audit: In open layouts (`house_00100`, `house_00101`, `house_00103`), stall watchdog does not fire as progress is steady. In constricted layouts (`house_00102`, `maze_00200`), goal oscillation triggers reliably on local boundary oscillations (e.g. `[WATCHDOG] Goal oscillation detected: alternated between goals 3 times. Blacklisting (7.38, 10.62)`), breaking deadlocks without stalling.
 - **DONE WHEN:** All tests pass; watchdog firing semantics verified in test suite and procedural run logs.
 
+### Task B9: Exploration-finished detection
+- **DO:**
+  1. Configurable minimum cluster size: Added `frontier_min_cluster_size` (default 2) to `config/mission.yaml`, passed to `MissionCoordinator` and `FrontierDetector`.
+  2. Exploration completion: In `core/mission/state_machine.py`, `EXPLORE` state verifies remaining frontier clusters using `count_remaining_clusters(grid_map)`. When no frontier clusters larger than the configured minimum remain (e.g. on a fully known map or after completing building exploration), or when all clusters are unreachable after full breadcrumb backtracking, the mission coordinator transitions to `RETURN_HOME` with exit cause `EXPLORATION_FINISHED`.
+  3. Created unit test suite `tests/test_exploration_finished.py`:
+     - `test_exploration_finished_on_fully_known_map`: verifies instant transition from EXPLORE to RETURN_HOME on a fully mapped space with 0 frontier clusters.
+     - `test_configurable_min_cluster_size`: verifies cluster filtering with threshold 5 terminating on 2-cell residual noise, while threshold 2 continues exploration.
+- **CHECK:**
+  - `pytest -q tests/test_exploration_finished.py`: 2 passed in 4.57s.
+  - `pytest -q`: 29 passed in 5.19s.
+- **DONE WHEN:** Unit tests on fully known map and configurable minimum cluster size pass.
+
 
 
 

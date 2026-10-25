@@ -156,7 +156,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
   blacklist the current goal and replan. Unit test with a scripted stall.
   DONE WHEN: test passes; a run log shows the watchdog never fires in normal runs (or explains each firing).
 
-- [ ] B9 Exploration-finished detection
+- [x] B9 Exploration-finished detection
   DO: finish exploring when no reachable frontier cluster larger than a configurable minimum remains.
   Unit test on a fully known map.
   DONE WHEN: test passes.
