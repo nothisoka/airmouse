@@ -59,8 +59,14 @@ class WaypointController:
         cmd_vz = np.clip(self.kp_z * dz, -self.max_vel_z, self.max_vel_z)
 
         # Heading alignment: turn toward target waypoint if distance is significant
+        # Snap to cardinal headings along corridors to prevent angling into side walls
         if dist_xy > 0.4:
-            target_yaw = math.atan2(dy, dx)
+            if abs(dx) > 2.0 * abs(dy):
+                target_yaw = 0.0 if dx > 0 else math.pi
+            elif abs(dy) > 2.0 * abs(dx):
+                target_yaw = math.pi / 2.0 if dy > 0 else -math.pi / 2.0
+            else:
+                target_yaw = math.atan2(dy, dx)
             yaw_err = (target_yaw - yaw + math.pi) % (2 * math.pi) - math.pi
             cmd_yaw_rate = np.clip(self.kp_yaw * yaw_err, -self.max_yaw_rate, self.max_yaw_rate)
         else:

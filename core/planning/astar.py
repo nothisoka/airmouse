@@ -131,7 +131,7 @@ class AStarPlanner:
             prev = smoothed[-1]
             curr = waypoints[i]
             dist = math.hypot(curr[0] - prev[0], curr[1] - prev[1])
-            if dist >= 0.5:  # sample every ~0.5m
+            if dist >= 0.35:  # sample every ~0.35m (keeps path clear of wall corners)
                 smoothed.append(curr)
 
         smoothed.append(waypoints[-1])

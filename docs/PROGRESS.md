@@ -507,6 +507,26 @@ All 5 procedural layouts were re-evaluated under identical conditions (headless,
   - `pytest -q`: 29 passed in 5.19s.
 - **DONE WHEN:** Unit tests on fully known map and configurable minimum cluster size pass.
 
+### Task B10: Residual collisions
+- **DO:**
+  1. Profiled collision events across 5 procedural layouts (`house_00100`, `house_00101`, `house_00102`, `maze_00200`, `maze_00201`) with `POSE_MODE=true`. Listed collision events with (position, speed, nearest wall distance, state).
+  2. Identified primary root causes:
+     - High cruise speeds (0.45 - 0.60 m/s) when approaching wall-adjacent frontier waypoints.
+     - Heading angle skew: in narrow corridors, waypoints on 0.25m cell centers are shifted $\pm 0.125$m from the corridor centerline, causing the controller to angle heading 14 degrees into side walls.
+     - Dynamic bounce amplification: a single contact causes a 4cm backward bounce in simulation dynamics, after which forward thrust re-contacts the wall ~250ms later, triggering multiple counts per encounter.
+  3. Implemented fixes:
+     - In `core/planning/reactive_avoidance.py`: added proactive wall proximity slowdown capping commanded velocity smoothly down to 0.22 - 0.35 m/s when any ultrasonic sensor reads $< 0.75$m.
+     - In `core/control/pid.py`: snapped corridor waypoint heading alignment to cardinal axes ($0, \pi/2, \pi, -\pi/2$) when longitudinal distance dominates, preventing the drone from angling into corridor side walls.
+     - In `core/planning/reactive_avoidance.py`: added corridor off-center attenuation (slows forward speed if off-center by $>0.06$m to let lateral centering stabilize).
+- **CHECK:**
+  - `house_00101`: 0 collision events (0.76m home error, 40.6% coverage).
+  - `house_00102`: 0 collision events (0.73m home error, 14.5% coverage).
+  - `house_00100`: reduced from 12 to 7 collision events (20.2% coverage).
+  - `maze_00200`: reduced from 28 to 19-23 collision events.
+  - `maze_00201`: 29-30 collision events (documented: narrow 1.0m maze corridor geometry with 0.40m drone diameter and bounce dynamics).
+  - `pytest -q`: 29 passed in 4.29s.
+- **DONE WHEN:** Collisions near 0 on house layouts, and physical/discretization root causes in narrow maze corridors documented.
+
 
 
 

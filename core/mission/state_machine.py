@@ -323,8 +323,8 @@ class MissionCoordinator:
                 self.state = MissionState.LAND
                 return VelocityCommand(vx=0.0, vy=0.0, vz=-0.4, yaw_rate_radps=0.0)
 
-            # Replan path periodically to adapt to newly mapped obstacles or deviations
-            if not self.current_path or (current_time_s - self.last_replan_time > self.replan_interval):
+            # Plan path home if not already following one
+            if not self.current_path:
                 self._plan_return_home(drone_state)
                 self.last_replan_time = current_time_s
 

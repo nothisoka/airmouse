@@ -15,7 +15,7 @@ exploration:
 
 reactive_avoidance:
   enabled: true
-  danger_distance_m: 0.35      # emergency halt and back-off if any sensor < 0.35m
-  slowdown_distance_m: 0.70    # modulate speed down when approaching obstacles
-  repulsion_gain: 0.5
+  danger_distance_m: 0.40      # emergency halt and back-off if any sensor < 0.40m
+  slowdown_distance_m: 0.85    # modulate speed down when approaching obstacles (< 0.85m)
+  repulsion_gain: 0.8
 

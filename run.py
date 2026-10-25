@@ -18,6 +18,7 @@ import time
 from pathlib import Path
 from typing import Optional
 import numpy as np
+import cv2
 import yaml
 
 try:
@@ -215,6 +216,8 @@ def run_pygame_sim(
     paused = False
     running = True
 
+    wall_dist_map = cv2.distanceTransform((true_grid == 0).astype(np.uint8), cv2.DIST_L2, 5) * metadata.cell_size_m
+
     step_count = 0
     exit_reason = "COMPLETE"
     while running and mission.state != MissionState.COMPLETE:
@@ -312,11 +315,13 @@ def run_pygame_sim(
                         mission.tracker.update(ground_coords, det.confidence)
 
         # Periodic status logging in terminal
+        true_phys = drone.get_state()
+        active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
         if step_count % 200 == 0:  # every 2.0 simulation seconds
             cov_p = compute_true_room_coverage(true_grid, grid_map, metadata.cell_size_m)
             print(f"[t={sim_time:5.1f}s] State: {mission.state.name:<11} | "
-                  f"Pos: ({drone_state.position[0]:.2f}, {drone_state.position[1]:.2f}) | "
-                  f"Alt: {drone_state.position[2]:.2f}m | "
+                  f"Pos: ({active_pose.position[0]:.2f}, {active_pose.position[1]:.2f}) | "
+                  f"Alt: {active_pose.position[2]:.2f}m | "
                   f"Drift: {drift:.2f}m | "
                   f"Cov: {cov_p:4.1f}% | "
                   f"Survivors: {len(mission.tracker.confirmed_survivors)}/6")
@@ -333,9 +338,6 @@ def run_pygame_sim(
                   f"Blacklisted: {blacklisted:2d}")
 
         # Step 4d: Autonomy Mission Coordinator Update
-        drone_state = ekf.get_state(sim_time)
-        true_phys = drone.get_state()
-        active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
         cmd = mission.update(
             current_time_s=sim_time,
             drone_state=active_pose,
@@ -351,12 +353,19 @@ def run_pygame_sim(
         drift = float(np.linalg.norm(drone_state.position[:2] - true_phys.position[:2]))
         is_coll = getattr(drone, 'had_collision', False)
         drone.had_collision = False
+        prev_in_coll = logger.in_collision
         logger.record_step(
             est_pos=drone_state.position,
             true_pos=true_phys.position,
             is_collision=is_coll,
             sim_time=sim_time,
         )
+        if is_coll and not prev_in_coll:
+            cx = int(np.clip(true_phys.position[0] / metadata.cell_size_m, 0, metadata.cols - 1))
+            cy = int(np.clip(metadata.rows - (true_phys.position[1] / metadata.cell_size_m), 0, metadata.rows - 1))
+            w_dist = float(wall_dist_map[cy, cx])
+            sp = float(np.linalg.norm(drone.vel[:2]))
+            print(f"[COLLISION EVENT #{logger.collisions}] t={sim_time:.2f}s pos=({true_phys.position[0]:.2f}, {true_phys.position[1]:.2f}) speed={sp:.2f}m/s wall_dist={w_dist:.2f}m state={mission.state.name}")
 
         # Failsafe checks
         if true_phys.battery_pct <= 0.0:

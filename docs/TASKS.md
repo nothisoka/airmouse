@@ -161,7 +161,7 @@ Always use POSE_MODE=true in this phase. Always compare with the A9 tables.
   Unit test on a fully known map.
   DONE WHEN: test passes.
 
-- [ ] B10 Residual collisions
+- [x] B10 Residual collisions
   DO: with POSE_MODE=true run 5 layouts, list the collision events (position, speed, nearest wall
   distance, state). Fix the single most common pattern (for example: slow down within X m of walls).
   DONE WHEN: collision_events is near 0 on those layouts or the cause is documented.
