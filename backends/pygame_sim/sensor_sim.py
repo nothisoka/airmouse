@@ -168,43 +168,59 @@ class SimulatedLidar2D(Lidar2D):
         return self.cached_scan
 
     def _cast_ray(self, x0: float, y0: float, angle: float, max_dist: float) -> float:
-        """Raycast against grid cells with sub-millimeter bisection refinement."""
+        """Fast Digital Differential Analyzer (DDA) raycast against axis-aligned grid cells."""
         cos_a = math.cos(angle)
         sin_a = math.sin(angle)
-        step = 0.10
-        d = 0.0
-        hit = False
-        while d < max_dist:
-            d += step
-            rx = x0 + d * cos_a
-            ry = y0 + d * sin_a
-            cx = int(rx / self.cell_size)
-            cy = int(self.rows - (ry / self.cell_size))
-            if cx < 0 or cx >= self.cols or cy < 0 or cy >= self.rows:
-                hit = True
-                break
-            if self.grid[cy, cx] != 0:
-                hit = True
-                break
 
-        if not hit:
-            return max_dist
+        cell_size = self.cell_size
+        rows = self.rows
+        cols = self.cols
+        grid = self.grid
 
-        # Refine intersection boundary using binary search bisection
-        d_low = max(0.0, d - step)
-        d_high = min(max_dist, d)
-        for _ in range(8):
-            d_mid = 0.5 * (d_low + d_high)
-            rx = x0 + d_mid * cos_a
-            ry = y0 + d_mid * sin_a
-            cx = int(rx / self.cell_size)
-            cy = int(self.rows - (ry / self.cell_size))
-            if cx < 0 or cx >= self.cols or cy < 0 or cy >= self.rows or self.grid[cy, cx] != 0:
-                d_high = d_mid
+        cx = int(x0 / cell_size)
+        cy = int(rows - (y0 / cell_size))
+
+        if cx < 0 or cx >= cols or cy < 0 or cy >= rows or grid[cy, cx] != 0:
+            return 0.0
+
+        step_x = 1 if cos_a > 0 else (-1 if cos_a < 0 else 0)
+        step_y = -1 if sin_a > 0 else (1 if sin_a < 0 else 0)
+
+        if step_x > 0:
+            t_max_x = ((cx + 1) * cell_size - x0) / cos_a
+            t_delta_x = cell_size / cos_a
+        elif step_x < 0:
+            t_max_x = (cx * cell_size - x0) / cos_a
+            t_delta_x = cell_size / -cos_a
+        else:
+            t_max_x = float('inf')
+            t_delta_x = float('inf')
+
+        if step_y < 0:
+            t_max_y = ((rows - cy) * cell_size - y0) / sin_a
+            t_delta_y = cell_size / sin_a
+        elif step_y > 0:
+            t_max_y = ((rows - cy - 1) * cell_size - y0) / sin_a
+            t_delta_y = cell_size / -sin_a
+        else:
+            t_max_y = float('inf')
+            t_delta_y = float('inf')
+
+        t = 0.0
+        while t < max_dist:
+            if t_max_x < t_max_y:
+                t = t_max_x
+                t_max_x += t_delta_x
+                cx += step_x
             else:
-                d_low = d_mid
+                t = t_max_y
+                t_max_y += t_delta_y
+                cy += step_y
 
-        return d_high
+            if cx < 0 or cx >= cols or cy < 0 or cy >= rows or grid[cy, cx] != 0:
+                return min(t, max_dist)
+
+        return max_dist
 
 
 class SimulatedSensorHub(SensorHub):

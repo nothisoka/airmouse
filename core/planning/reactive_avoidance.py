@@ -44,18 +44,13 @@ class ReactiveAvoidance:
         safe_vy = cmd.vy
         override_active = False
 
-        # 1. Proximity slowdown: smoothly cap speed when within slowdown_dist of any obstacle
-        valid_ranges = [
-            ranges[s].range_m
-            for s in ("front", "left", "right", "rear")
-            if s in ranges and ranges[s].valid and ranges[s].range_m > 0.05
-        ]
-        min_wall_dist = min(valid_ranges, default=4.0)
+        # 1. Proximity slowdown: smoothly cap speed when approaching obstacle ahead
+        front_dist = ranges["front"].range_m if ("front" in ranges and ranges["front"].valid and ranges["front"].range_m > 0.05) else 4.0
 
-        if min_wall_dist < self.slowdown_dist:
+        if front_dist < self.slowdown_dist:
             curr_speed = math.hypot(safe_vx, safe_vy)
             if curr_speed > 1e-3:
-                fraction = max(0.0, (min_wall_dist - self.danger_dist) / (self.slowdown_dist - self.danger_dist))
+                fraction = max(0.0, (front_dist - self.danger_dist) / (self.slowdown_dist - self.danger_dist))
                 speed_cap = float(np.clip(0.25 + 0.35 * fraction, 0.22, 0.60))
                 if curr_speed > speed_cap:
                     scale = speed_cap / curr_speed

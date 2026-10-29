@@ -73,59 +73,61 @@ class OccupancyGrid:
         - Marks occupied cell at the hit point
         - Skips occupied update for max-range returns (dropouts or open space)
         """
-        step = self.res * 0.75
-        l_free = self.l_free
-        l_occ = self.l_occ
-        l_min = self.l_min
-        l_max = self.l_max
-
-        angle_min = scan.angle_min
-        angle_inc = scan.angle_increment
         r_min = scan.range_min
         r_max = scan.range_max
+        res = self.res
+        inv_res = 1.0 / res
+        rows, cols = self.rows, self.cols
 
-        num_rays = len(scan.ranges)
-        for i in range(num_rays):
-            r = float(scan.ranges[i])
-            if r < r_min or math.isnan(r):
-                continue
+        ranges = np.asarray(scan.ranges, dtype=np.float32)
+        num_rays = len(ranges)
+        angles = yaw_rad + scan.angle_min + np.arange(num_rays) * scan.angle_increment
 
-            ray_angle = yaw_rad + angle_min + i * angle_inc
-            cos_a = math.cos(ray_angle)
-            sin_a = math.sin(ray_angle)
+        valid = (ranges >= r_min) & ~np.isnan(ranges)
+        if not np.any(valid):
+            return
 
-            # Determine whether this ray is an obstacle hit or max-range return
-            is_hit = (r < r_max - 0.05)
-            free_end_dist = (r - self.res * 0.5) if is_hit else min(r, r_max)
+        v_ranges = ranges[valid]
+        v_angles = angles[valid]
+        is_hit = v_ranges < (r_max - 0.05)
+        free_end = np.where(is_hit, v_ranges - res * 0.5, np.minimum(v_ranges, r_max))
 
-            # Trace free space along ray
-            last_gx, last_gy = -1, -1
-            dist = step
-            while dist <= free_end_dist:
-                wx = start_wx + dist * cos_a
-                wy = start_wy + dist * sin_a
-                gx, gy = self.world_to_grid(wx, wy)
-                if not self.in_bounds(gx, gy):
-                    break
-                if gx != last_gx or gy != last_gy:
-                    nval = self.log_odds[gy, gx] + l_free
-                    if nval < l_min:
-                        nval = l_min
-                    self.log_odds[gy, gx] = nval
-                    last_gx, last_gy = gx, gy
-                dist += step
+        cos_a = np.cos(v_angles)
+        sin_a = np.sin(v_angles)
 
-            # Occupied cell at hit point (skip max-range returns)
-            if is_hit:
-                hit_offset = min(0.05, self.res * 0.2)
-                hit_wx = start_wx + (r + hit_offset) * cos_a
-                hit_wy = start_wy + (r + hit_offset) * sin_a
-                gx, gy = self.world_to_grid(hit_wx, hit_wy)
-                if self.in_bounds(gx, gy):
-                    nval = self.log_odds[gy, gx] + l_occ
-                    if nval > l_max:
-                        nval = l_max
-                    self.log_odds[gy, gx] = nval
+        max_d = float(np.max(free_end)) if len(free_end) > 0 else 0.0
+        if max_d >= res * 0.75:
+            steps = np.arange(res * 0.75, max_d + res * 0.75, res * 0.75)
+            step_mask = steps[None, :] <= free_end[:, None]
+            ray_idx, step_idx = np.where(step_mask)
+
+            wx = start_wx + steps[step_idx] * cos_a[ray_idx]
+            wy = start_wy + steps[step_idx] * sin_a[ray_idx]
+            gx = (wx * inv_res).astype(np.int32)
+            gy = (wy * inv_res).astype(np.int32)
+
+            in_b = (gx >= 0) & (gx < cols) & (gy >= 0) & (gy < rows)
+            gx = gx[in_b]
+            gy = gy[in_b]
+
+            flat_idx = np.unique(gy * cols + gx)
+            self.log_odds.flat[flat_idx] = np.maximum(
+                self.l_min, self.log_odds.flat[flat_idx] + self.l_free
+            )
+
+        # Hit points
+        hit_idx = np.where(is_hit)[0]
+        if len(hit_idx) > 0:
+            hit_offset = min(0.05, res * 0.2)
+            hit_wx = start_wx + (v_ranges[hit_idx] + hit_offset) * cos_a[hit_idx]
+            hit_wy = start_wy + (v_ranges[hit_idx] + hit_offset) * sin_a[hit_idx]
+            hgx = (hit_wx * inv_res).astype(np.int32)
+            hgy = (hit_wy * inv_res).astype(np.int32)
+            in_b = (hgx >= 0) & (hgx < cols) & (hgy >= 0) & (hgy < rows)
+            flat_hit = np.unique(hgy[in_b] * cols + hgx[in_b])
+            self.log_odds.flat[flat_hit] = np.minimum(
+                self.l_max, self.log_odds.flat[flat_hit] + self.l_occ
+            )
 
     def update_beam(
         self,

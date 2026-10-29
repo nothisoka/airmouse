@@ -86,7 +86,7 @@ camera_front:
   focal_length_px: 228.5       # fx = (width/2) / tan(fov_h / 2)
 
 camera_down:
-  enabled: false
+  enabled: true
   rate_hz: 20
   width: 320
   height: 240
@@ -96,7 +96,7 @@ camera_down:
   focal_length_px: 228.5
 
 lidar2d:
-  enabled: false
+  enabled: true
   rate_hz: 8.0
   lidar_rate_hz: 8.0
   num_rays: 360

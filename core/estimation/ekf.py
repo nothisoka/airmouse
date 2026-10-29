@@ -50,7 +50,7 @@ class SensorFusionEKF:
         ]).astype(np.float64)
 
         # Process noise Q
-        self.q_pos = 0.001
+        self.q_pos = 0.01
         self.q_vel = 0.08
         self.q_att = 0.005
         self.q_bax = 0.0001
@@ -124,9 +124,10 @@ class SensorFusionEKF:
         # Altitude filter prediction
         self.alt_filter.predict(az_world=float(accel_world[2]), dt=dt)
 
-        # Damp horizontal velocity predictions gently between VO updates
-        self.x[3] *= 0.995
-        self.x[4] *= 0.995
+        # Damp horizontal velocity predictions gently between VO updates (rate-scaled)
+        v_damp = max(0.90, 1.0 - 0.10 * dt)
+        self.x[3] *= v_damp
+        self.x[4] *= v_damp
 
         # Accelerometer gravity reference update for Roll and Pitch
         # When dynamic acceleration is low and hovering, specific force aligns with gravity
@@ -151,6 +152,8 @@ class SensorFusionEKF:
             self.q_bgx, self.q_bgx, self.q_bgx,
         ]) * dt
         self.P += Q
+        self.P[0, 0] = max(0.005, self.P[0, 0])
+        self.P[1, 1] = max(0.005, self.P[1, 1])
 
     def update_sonar(self, ranges: Dict[str, RangeData]):
         if "down" not in ranges or not ranges["down"].valid:
@@ -332,6 +335,8 @@ class SensorFusionEKF:
         IKH = I_15 - K @ H
         self.P = IKH @ self.P @ IKH.T + K @ R @ K.T
         self.P = 0.5 * (self.P + self.P.T)
+        self.P[0, 0] = max(0.005, self.P[0, 0])
+        self.P[1, 1] = max(0.005, self.P[1, 1])
 
     def update_lidar_match(
         self,
@@ -379,8 +384,8 @@ class SensorFusionEKF:
         except np.linalg.LinAlgError:
             return False
 
-        # Outlier gating: reject implausible single-step jumps (> 0.60 m or > 25 deg)
-        if np.linalg.norm(innov[:2]) > 0.60 or abs(innov[2]) > math.radians(25.0):
+        # Outlier gating: reject implausible single-step jumps (> 2.5 m or > 35 deg)
+        if np.linalg.norm(innov[:2]) > 2.5 or abs(innov[2]) > math.radians(35.0):
             return False
 
         # Kalman gain (15x3)
@@ -388,32 +393,29 @@ class SensorFusionEKF:
 
         # State update
         dx = K @ innov
-        self.x += dx
-        self.x[8] = (self.x[8] + math.pi) % (2.0 * math.pi) - math.pi
+        dx_pos = np.clip(dx[:2], -0.25, 0.25)
+        self.x[0] += dx_pos[0]
+        self.x[1] += dx_pos[1]
+        dx_yaw = float(np.clip(dx[8], -math.radians(10.0), math.radians(10.0)))
+        self.x[8] = (self.x[8] + dx_yaw + math.pi) % (2.0 * math.pi) - math.pi
 
         # Joseph form covariance update
         I_15 = np.eye(15, dtype=np.float64)
         IKH = I_15 - K @ H
         self.P = IKH @ self.P @ IKH.T + K @ R @ K.T
         self.P = 0.5 * (self.P + self.P.T)
+        self.P[0, 0] = max(0.005, self.P[0, 0])
+        self.P[1, 1] = max(0.005, self.P[1, 1])
 
-        # Velocity and accelerometer bias tracking from smooth position corrections
+        # Velocity tracking from smooth position corrections
         if timestamp_s is not None and timestamp_s > 0:
             if self.last_lidar_match_time > 0:
                 dt = timestamp_s - self.last_lidar_match_time
                 if 0.04 < dt < 0.5 and self.last_lidar_match_pos is not None:
                     meas_vel = (z[:2] - self.last_lidar_match_pos) / dt
-                    v_innov = meas_vel - self.x[3:5]
-                    # Smoothly update horizontal velocity
-                    self.x[3] += 0.35 * v_innov[0]
-                    self.x[4] += 0.35 * v_innov[1]
-                    # Update horizontal accelerometer bias in body frame
-                    yaw = self.x[8]
-                    cy, sy = math.cos(yaw), math.sin(yaw)
-                    ba_world_x = 0.01 * v_innov[0]
-                    ba_world_y = 0.01 * v_innov[1]
-                    self.x[9] -= (ba_world_x * cy + ba_world_y * sy)
-                    self.x[10] -= (-ba_world_x * sy + ba_world_y * cy)
+                    v_innov = np.clip(meas_vel - self.x[3:5], -0.4, 0.4)
+                    self.x[3] += 0.25 * v_innov[0]
+                    self.x[4] += 0.25 * v_innov[1]
 
             self.last_lidar_match_time = timestamp_s
             self.last_lidar_match_pos = z[:2].copy()

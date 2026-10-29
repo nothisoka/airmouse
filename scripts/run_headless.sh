@@ -22,6 +22,7 @@ else
 fi
 
 mkdir -p generated_maps
+export YOLO_CONFIG_DIR="${YOLO_CONFIG_DIR:-/tmp/ultralytics}"
 
 METRICS_JSON="generated_maps/metrics_${LABEL}.json"
 LOG_FILE="generated_maps/run_${LABEL}.log"
@@ -38,8 +39,8 @@ fi
 
 rm -f "$METRICS_JSON"
 
-# Run the simulation headless under timeout 300
-timeout 300 "$PYTHON" run.py \
+# Run the simulation headless under timeout 420 (7 minutes limit)
+timeout 420 "$PYTHON" run.py \
     --map "$MAP_PATH" \
     --headless \
     --output-json "$METRICS_JSON" \

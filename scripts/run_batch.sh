@@ -42,6 +42,7 @@ mkdir -p generated_maps
 export POSE_MODE
 export PROFILE
 export ENABLE_YOLO="${ENABLE_YOLO:-true}"
+export YOLO_CONFIG_DIR="${YOLO_CONFIG_DIR:-/tmp/ultralytics}"
 
 # Run headless sequentially on each layout and print markdown table with MEAN / WORST rows
 "$PYTHON" - "$START_SEED" "$COUNT" "$MODE" "$POSE_MODE" "$PROFILE" << 'EOF'
@@ -65,6 +66,7 @@ for i in range(count):
     # Run run_headless.sh in foreground; failure must not abort the batch
     cmd = ["scripts/run_headless.sh", str(map_json), label]
     res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    print(f"[{i+1}/{count}] Completed {map_name} (code={res.returncode}): {res.stdout.strip()}", file=sys.stderr, flush=True)
     
     # Read metrics JSON
     metrics_path = Path("generated_maps") / f"metrics_{label}.json"

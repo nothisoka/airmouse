@@ -141,6 +141,10 @@ class MissionCoordinator:
         path = self.planner.plan(self.grid_map, drone_xy, self.start_world, allow_unknown=False)
         if path and len(path) >= 2:
             return path
+        # Next try planning allowing unknown space (still strictly avoids all detected obstacles)
+        path_u = self.planner.plan(self.grid_map, drone_xy, self.start_world, allow_unknown=True)
+        if path_u and len(path_u) >= 2:
+            return path_u
         # Fallback to reverse traversed breadcrumbs (guaranteed collision-free verified path)
         if self.breadcrumbs:
             dists = [math.hypot(b[0] - drone_xy[0], b[1] - drone_xy[1]) for b in self.breadcrumbs]
@@ -278,20 +282,18 @@ class MissionCoordinator:
                 if self.no_frontier_count < 10:
                     return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.6)
                 else:
-                    # Frontier clusters exist! Clear failure counts and backtrack along breadcrumbs
-                    self.frontier_detector.blacklist_counts.clear()
-                    self.no_frontier_count = 0
                     if len(self.breadcrumbs) > 1:
-                        prev_crumb = self.breadcrumbs[-2]
+                        prev_crumb = self.breadcrumbs.pop()
+                        while self.breadcrumbs and math.hypot(drone_xy[0] - prev_crumb[0], drone_xy[1] - prev_crumb[1]) < 0.8:
+                            prev_crumb = self.breadcrumbs.pop()
                         backtrack_path = self.planner.plan(self.grid_map, drone_xy, prev_crumb, allow_unknown=True)
                         if backtrack_path:
                             self.current_path = backtrack_path
                             self.current_target = prev_crumb
-                            if len(self.breadcrumbs) > 2:
-                                self.breadcrumbs.pop()
+                            self.is_backtracking = True
                             return VelocityCommand(vx=0.0, vy=0.0, vz=0.0, yaw_rate_radps=0.0)
 
-                    # Backtracked all the way to start and still no reachable clusters
+                    # Backtracked all the way or no path back: no reachable frontier clusters remaining
                     print(f"[RTH TRIGGER] Return-home triggered: no reachable frontier clusters remaining at t={elapsed:.1f}s.")
                     if not self.end_cause or self.end_cause == "UNKNOWN":
                         self.end_cause = "EXPLORATION_FINISHED (no reachable clusters remaining)"
@@ -301,9 +303,10 @@ class MissionCoordinator:
 
             # Record safe traversed breadcrumbs
             drone_xy = (float(drone_state.position[0]), float(drone_state.position[1]))
-            if math.hypot(drone_xy[0] - self.last_breadcrumb_pos[0], drone_xy[1] - self.last_breadcrumb_pos[1]) >= 0.5:
-                self.breadcrumbs.append(drone_xy)
-                self.last_breadcrumb_pos = drone_xy
+            if not getattr(self, "is_backtracking", False):
+                if math.hypot(drone_xy[0] - self.last_breadcrumb_pos[0], drone_xy[1] - self.last_breadcrumb_pos[1]) >= 0.5:
+                    self.breadcrumbs.append(drone_xy)
+                    self.last_breadcrumb_pos = drone_xy
 
             # Follow current path
             target_pt = self.current_path[0]
@@ -312,6 +315,8 @@ class MissionCoordinator:
 
             if reached:
                 self.current_path.pop(0)
+                if not self.current_path:
+                    self.is_backtracking = False
 
             # Apply reactive sonar avoidance filter
             safe_cmd, override = self.avoidance.filter_command(cmd, ranges)
@@ -335,7 +340,7 @@ class MissionCoordinator:
                 if dist_from_anchor > 0.4:
                     self.stall_anchor_pos = drone_xy
                     self.stall_start_time = current_time_s
-                elif self.stall_start_time >= 0.0 and (current_time_s - self.stall_start_time >= 5.0):
+                elif self.stall_start_time >= 0.0 and (current_time_s - self.stall_start_time >= 15.0):
                     self.current_path = []
                     self.stall_anchor_pos = drone_xy
                     self.stall_start_time = current_time_s

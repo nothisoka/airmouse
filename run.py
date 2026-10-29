@@ -37,7 +37,7 @@ from airmouse.core.perception.yolo_detector import YoloDetector
 from airmouse.core.perception.ray_projector import GroundRayProjector
 from airmouse.core.mission.state_machine import MissionCoordinator, MissionState
 from airmouse.core.mission.mission_logger import MissionLogger
-from airmouse.core.hal import DroneState, PoseQuality
+from airmouse.core.hal import DroneState, PoseQuality, RangeData
 
 from airmouse.backends.pygame_sim.drone_dynamics import DroneDynamics
 from airmouse.backends.pygame_sim.world_renderer import WorldRenderer
@@ -166,6 +166,7 @@ def run_pygame_sim(
     print(f"========================================================\n")
 
     np.random.seed(seed)
+    random.seed(seed)
 
     # 1. Load Map Assets
     true_grid, metadata = load_map_file(str(resolved_map))
@@ -242,6 +243,7 @@ def run_pygame_sim(
 
     step_count = 0
     last_yolo_time = -1.0
+    active_ranges: dict[str, RangeData] = {}
     exit_reason = "COMPLETE"
     while running and mission.state != MissionState.COMPLETE:
         # Check GUI events
@@ -287,28 +289,30 @@ def run_pygame_sim(
         # Step 4b: Poll Sonar Ranges (20 Hz) & Update Map + EKF Altitude
         ranges = sensor_hub.read_ranges()
         if ranges:
+            active_ranges.update(ranges)
             ekf.update_sonar(ranges)
             drone_state = ekf.get_state(sim_time)
             # Scan-to-map drift correction against established map walls before updating beams
-            if not debug_true_pose and step_count % 10 == 0:
+            if not debug_true_pose and not sensor_hub.has_sensor("lidar2d") and step_count % 10 == 0:
                 ekf.update_scan_to_map(ranges, grid_map)
                 drone_state = ekf.get_state(sim_time)
 
-            # Update occupancy grid with horizontal sensor beams
-            true_phys = drone.get_state()
-            active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
-            map_yaw = active_pose.attitude_rpy[2]
-            map_x, map_y = active_pose.position[0], active_pose.position[1]
-            yaw_offsets = {"front": 0.0, "left": math.pi / 2.0, "right": -math.pi / 2.0, "rear": math.pi}
-            for sid, offset in yaw_offsets.items():
-                if sid in ranges:
-                    grid_map.update_beam(
-                        start_wx=map_x,
-                        start_wy=map_y,
-                        angle_rad=map_yaw + offset,
-                        range_m=ranges[sid].range_m,
-                        valid_hit=ranges[sid].valid,
-                    )
+            # Update occupancy grid with horizontal sensor beams (when no lidar)
+            if not sensor_hub.has_sensor("lidar2d"):
+                true_phys = drone.get_state()
+                active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
+                map_yaw = active_pose.attitude_rpy[2]
+                map_x, map_y = active_pose.position[0], active_pose.position[1]
+                yaw_offsets = {"front": 0.0, "left": math.pi / 2.0, "right": -math.pi / 2.0, "rear": math.pi}
+                for sid, offset in yaw_offsets.items():
+                    if sid in ranges:
+                        grid_map.update_beam(
+                            start_wx=map_x,
+                            start_wy=map_y,
+                            angle_rad=map_yaw + offset,
+                            range_m=ranges[sid].range_m,
+                            valid_hit=ranges[sid].valid,
+                        )
 
         # Step 4c: Poll Camera (20 Hz) & Run Optical Flow + YOLO
         cam = sensor_hub.read_camera()
@@ -320,15 +324,15 @@ def run_pygame_sim(
             ekf.update_camera(cam, gyro_rates)
 
             # Adaptive YOLO inference:
-            # Baseline: 1.0 Hz (1.0s period) during general exploration
-            # Burst: 2.0 Hz (0.50s period) for up to 2.0s when confirming recent unconfirmed tracks
+            # Baseline: 0.5 Hz (2.0s period) during general exploration
+            # Burst: 1.0 Hz (1.0s period) for up to 2.0s when confirming recent unconfirmed tracks
             recent_unconfirmed = any(
                 not t.confirmed and (sim_time - getattr(t, 'last_seen_time', 0.0) <= 2.0)
                 for t in mission.tracker.tracks
             )
             all_found = len(mission.tracker.confirmed_survivors) >= 6
-            yolo_period = 0.50 if recent_unconfirmed else 1.00
-            if yolo is not None and not all_found and (sim_time - last_yolo_time >= yolo_period - 1e-4):
+            yolo_period = 1.00 if recent_unconfirmed else 2.00
+            if yolo is not None and not all_found and mission.state == MissionState.EXPLORE and (sim_time - last_yolo_time >= yolo_period - 1e-4):
                 last_yolo_time = sim_time
                 prev_confirmed_count = len(mission.tracker.confirmed_survivors)
                 latest_detections = yolo.detect(cam.image_bgr)
@@ -385,6 +389,8 @@ def run_pygame_sim(
                     scan=scan,
                 )
 
+
+
         # Periodic status logging in terminal
         true_phys = drone.get_state()
         active_pose = make_drone_state_from_physical(true_phys, sim_time) if debug_true_pose else drone_state
@@ -412,7 +418,7 @@ def run_pygame_sim(
         cmd = mission.update(
             current_time_s=sim_time,
             drone_state=active_pose,
-            ranges=ranges,
+            ranges=active_ranges,
         )
 
         # Step 4e: Physical Simulation Step
@@ -468,7 +474,7 @@ def run_pygame_sim(
                 mission_state=mission.state,
                 flight_time_s=sim_time,
                 battery_pct=true_phys.battery_pct,
-                ranges=ranges,
+                ranges=active_ranges,
                 coverage_pct=cov_pct,
                 drift_m=drift,
             )
